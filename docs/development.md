@@ -37,14 +37,26 @@ On Windows, use `scripts\manage.bat test`.
 
 The executable is written to `build/opengl-sim` (or `build/opengl-sim.exe` on Windows). Run it from the project root so project-relative output such as logs has a predictable location. The CMake configuration writes `compile_commands.json` into the build directory.
 
-On Windows, `scripts\manage.bat` provides the same `build`, `run`, `clean`, and `--single` actions as the shell script. Its `--auto` option uses winget to set up CMake and Visual Studio C++ Build Tools, downloads vcpkg if needed, installs GLFW/GLM/GLEW for the detected Windows architecture, then builds and optionally runs the app:
+On Windows, `scripts\manage.bat` provides `build`, `run`, `test`, `clean`, and `--single`, and configures GCC with Ninja. Its `--auto` option uses winget to install MSYS2 when needed, then pacman to install the UCRT64 GCC toolchain, CMake, Ninja, GLFW, GLM, and GLEW:
 
 ```bat
 scripts\manage.bat build --auto
 scripts\manage.bat run --auto --single
 ```
 
-The automatic setup requires winget, network access, and approval for toolchain installation. Dependencies are installed under the vcpkg root at `%LOCALAPPDATA%\opengl-sim\vcpkg` by default.
+The automatic setup requires winget and network access. It looks for MSYS2 at `C:\msys64`, `%ProgramFiles%\MSYS2`, or `%LOCALAPPDATA%\Programs\MSYS2`; set `MSYS2_ROOT` to use another installation directory.
+
+### Windows GCC build with MSYS2
+
+To build with open source GCC manually, install the packages listed in the [Windows GCC instructions](../README.md#windows-with-open-source-gcc), open the **MSYS2 UCRT64** terminal, and use the Ninja generator explicitly:
+
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++
+cmake --build build --parallel
+./build/opengl-sim.exe
+```
+
+Run these commands from the project root inside UCRT64. Its `PATH` includes the matching runtime DLLs. If `build/` was configured earlier with another compiler or generator, remove that directory before configuring with GCC.
 
 ## CMake conventions
 

@@ -34,6 +34,37 @@ On Debian or Ubuntu:
 sudo apt install cmake build-essential libglfw3-dev libglm-dev libglew-dev libgl1-mesa-dev
 ```
 
+### Windows with open source GCC
+
+Use [MSYS2](https://www.msys2.org/) and its **UCRT64** terminal to get a GCC toolchain and the matching GLFW, GLM, and GLEW packages. In the MSYS2 UCRT64 terminal, update the package database and system packages:
+
+```sh
+pacman -Syu
+```
+
+If the update asks you to close the terminal, close it, reopen **MSYS2 UCRT64**, and run `pacman -Syu` again. Then install the compiler, CMake, Ninja, and project dependencies:
+
+```sh
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc \
+  mingw-w64-ucrt-x86_64-cmake \
+  mingw-w64-ucrt-x86_64-ninja \
+  mingw-w64-ucrt-x86_64-glfw \
+  mingw-w64-ucrt-x86_64-glm \
+  mingw-w64-ucrt-x86_64-glew
+```
+
+From the project root in that same UCRT64 terminal, configure CMake to use GCC and Ninja, then build and run:
+
+```sh
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_COMPILER=g++
+cmake --build build --parallel
+./build/opengl-sim.exe
+```
+
+Run `ctest --test-dir build --output-on-failure` to run the test suite. Launch the program from the project root so `logs/simulator.log` is created in the expected location. The UCRT64 terminal supplies the runtime DLL search path for the MSYS2 libraries. The Windows management script also uses GCC and Ninja; its `--auto` option can install MSYS2 and the required UCRT64 packages.
+
 The CMake dependency setup first checks for a compatible project-local GLFW copy under `third_party/glfw/`, then checks for a system GLFW package. On macOS it also checks Homebrew's package prefix. The checked-in `third_party/glfw/lib/libglfw.3.5.dylib` is a macOS arm64 runtime library; other systems need their own compatible GLFW installation.
 
 ## Build and run
@@ -80,14 +111,14 @@ scripts\manage.bat clean
 scripts\manage.bat build --single
 ```
 
-`--single` copies the built program to the project root for convenience. It does not bundle GLFW or other shared libraries. The Windows script accepts `--auto` on `build` and `run` to use winget and vcpkg to install CMake, Visual Studio C++ Build Tools, GLFW, GLM, and GLEW, then configure, build, and (for `run`) start the app:
+`--single` copies the built program to the project root for convenience. It does not bundle GLFW or other shared libraries. The Windows script uses GCC with Ninja and accepts `--auto` on `build`, `run`, and `test` to install MSYS2 and its UCRT64 GCC, CMake, Ninja, GLFW, GLM, and GLEW packages with winget and pacman:
 
 ```bat
 scripts\manage.bat build --auto
 scripts\manage.bat run --auto --single
 ```
 
-`--auto` requires Windows Package Manager (`winget`) and an internet connection. Visual Studio Build Tools installation may require administrator approval and a large download. The vcpkg checkout and libraries are stored under `%LOCALAPPDATA%\opengl-sim\vcpkg` unless `VCPKG_ROOT` points to an existing vcpkg installation.
+`--auto` requires Windows Package Manager (`winget`) and an internet connection. By default, the script looks for MSYS2 under `C:\msys64`, `%ProgramFiles%\MSYS2`, or `%LOCALAPPDATA%\Programs\MSYS2`. Set `MSYS2_ROOT` if MSYS2 is installed in a different folder.
 
 ## Controls
 

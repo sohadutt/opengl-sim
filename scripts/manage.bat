@@ -6,7 +6,6 @@ set "BUILD_DIR=%ROOT_DIR%\build"
 set "PROJECT_NAME=opengl-sim"
 set "COPY_SINGLE=0"
 set "AUTO_SETUP=0"
-set "CMAKE_TOOLCHAIN_FILE="
 set "COMMAND_NAME=%~1"
 
 if /I "%COMMAND_NAME%"=="--help" goto :help
@@ -45,12 +44,14 @@ if /I not "%COMMAND_NAME%"=="build" if /I not "%COMMAND_NAME%"=="run" if /I not 
 
 if "%AUTO_SETUP%"=="1" call :auto_setup
 if errorlevel 1 exit /b 1
+call :prepare_gcc
+if errorlevel 1 exit /b 1
 
-if not defined CMAKE_EXE set "CMAKE_EXE=cmake"
-if defined CMAKE_TOOLCHAIN_FILE (
-    "%CMAKE_EXE%" -S "%ROOT_DIR%" -B "%BUILD_DIR%" -A %CMAKE_GENERATOR_PLATFORM% -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=%CMAKE_TOOLCHAIN_FILE%" "-DVCPKG_TARGET_TRIPLET=%VCPKG_TRIPLET%"
+echo Configuring with GCC and Ninja...
+if defined MSYS2_ROOT (
+    "%CMAKE_EXE%" -S "%ROOT_DIR%" -B "%BUILD_DIR%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ "-DCMAKE_PREFIX_PATH=%MSYS2_ROOT%\ucrt64"
 ) else (
-    "%CMAKE_EXE%" -S "%ROOT_DIR%" -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=Release
+    "%CMAKE_EXE%" -S "%ROOT_DIR%" -B "%BUILD_DIR%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++
 )
 if errorlevel 1 exit /b %errorlevel%
 
@@ -84,64 +85,75 @@ if /I "%COMMAND_NAME%"=="run" (
 )
 exit /b 0
 
+:prepare_gcc
+if not defined CMAKE_EXE set "CMAKE_EXE=cmake"
+
+rem Derive the MSYS2 root from g++ when its UCRT64 bin directory is on PATH.
+if defined MSYS2_ROOT goto :root_ready
+set "GCC_EXE="
+for /f "delims=" %%G in ('where g++.exe 2^>nul') do if not defined GCC_EXE set "GCC_EXE=%%G"
+if not defined GCC_EXE goto :root_ready
+for %%G in ("%GCC_EXE%") do set "GCC_BIN=%%~dpG"
+for %%I in ("%GCC_BIN%..\..") do set "MSYS2_ROOT=%%~fI"
+:root_ready
+if not defined MSYS2_ROOT if exist "C:\msys64\ucrt64\bin\g++.exe" set "MSYS2_ROOT=C:\msys64"
+
+if defined MSYS2_ROOT (
+    set "PATH=%MSYS2_ROOT%\ucrt64\bin;%MSYS2_ROOT%\usr\bin;%PATH%"
+)
+
+where "%CMAKE_EXE%" >nul 2>nul
+if errorlevel 1 (
+    echo Error: CMake was not found. Install it or use --auto.
+    exit /b 1
+)
+where g++ >nul 2>nul
+if errorlevel 1 (
+    echo Error: g++ was not found. Install GCC in MSYS2 UCRT64 and add its ucrt64\bin folder to PATH, or use --auto.
+    exit /b 1
+)
+where ninja >nul 2>nul
+if errorlevel 1 (
+    echo Error: Ninja was not found. Install mingw-w64-ucrt-x86_64-ninja in MSYS2 UCRT64, or use --auto.
+    exit /b 1
+)
+exit /b 0
+
 :auto_setup
-echo Checking Windows build tools and installing project dependencies...
+echo Checking for MSYS2 and installing the UCRT64 GCC toolchain and libraries...
 
 where winget >nul 2>nul
 if errorlevel 1 (
     echo Error: --auto requires Windows Package Manager winget.
-    echo Install winget, or install CMake, Visual Studio C++ Build Tools, GLFW, GLM, and GLEW manually.
+    echo Install MSYS2 and its UCRT64 GCC packages manually, or install winget.
     exit /b 1
 )
 
-where cmake >nul 2>nul
-if errorlevel 1 (
-    echo Installing CMake...
-    winget install --id Kitware.CMake --exact --accept-package-agreements --accept-source-agreements
+if not defined MSYS2_ROOT if exist "C:\msys64\usr\bin\bash.exe" set "MSYS2_ROOT=C:\msys64"
+if not defined MSYS2_ROOT if exist "%ProgramFiles%\MSYS2\usr\bin\bash.exe" set "MSYS2_ROOT=%ProgramFiles%\MSYS2"
+if not defined MSYS2_ROOT if exist "%LOCALAPPDATA%\Programs\MSYS2\usr\bin\bash.exe" set "MSYS2_ROOT=%LOCALAPPDATA%\Programs\MSYS2"
+
+if not defined MSYS2_ROOT (
+    echo Installing MSYS2 with winget. The installer may ask for confirmation...
+    winget install --id MSYS2.MSYS2 --exact --accept-package-agreements --accept-source-agreements
     if errorlevel 1 exit /b 1
-    if exist "%ProgramFiles%\CMake\bin\cmake.exe" set "CMAKE_EXE=%ProgramFiles%\CMake\bin\cmake.exe"
-    if defined CMAKE_EXE set "PATH=%ProgramFiles%\CMake\bin;%PATH%"
+    if exist "C:\msys64\usr\bin\bash.exe" set "MSYS2_ROOT=C:\msys64"
+    if not defined MSYS2_ROOT if exist "%ProgramFiles%\MSYS2\usr\bin\bash.exe" set "MSYS2_ROOT=%ProgramFiles%\MSYS2"
+    if not defined MSYS2_ROOT if exist "%LOCALAPPDATA%\Programs\MSYS2\usr\bin\bash.exe" set "MSYS2_ROOT=%LOCALAPPDATA%\Programs\MSYS2"
 )
 
-if not exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
-    echo Installing Visual Studio 2022 C++ Build Tools. This download may be large...
-    winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --accept-package-agreements --accept-source-agreements --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-    if errorlevel 1 exit /b 1
-)
-
-if defined VCPKG_ROOT if exist "%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" goto :vcpkg_ready
-set "VCPKG_ROOT=%LOCALAPPDATA%\opengl-sim\vcpkg"
-if exist "%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" goto :vcpkg_ready
-
-echo Downloading vcpkg into "%VCPKG_ROOT%"...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $base=Split-Path -Parent $env:VCPKG_ROOT; New-Item -ItemType Directory -Force -Path $base | Out-Null; $zip=Join-Path $base 'vcpkg-source.zip'; Invoke-WebRequest -Uri 'https://github.com/microsoft/vcpkg/archive/refs/heads/master.zip' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $base -Force; if (Test-Path $env:VCPKG_ROOT) { Remove-Item -LiteralPath $env:VCPKG_ROOT -Recurse -Force }; Move-Item -LiteralPath (Join-Path $base 'vcpkg-master') -Destination $env:VCPKG_ROOT; Remove-Item -LiteralPath $zip -Force"
-if errorlevel 1 (
-    echo Error: vcpkg download failed. Check the network connection and retry.
+if not defined MSYS2_ROOT (
+    echo Error: Could not find MSYS2. Set MSYS2_ROOT to its installation folder and retry.
     exit /b 1
 )
 
-:vcpkg_ready
-if not exist "%VCPKG_ROOT%\vcpkg.exe" (
-    call "%VCPKG_ROOT%\bootstrap-vcpkg.bat" -disableMetrics
-    if errorlevel 1 exit /b 1
-)
-
-set "VCPKG_TRIPLET=x64-windows"
-set "CMAKE_GENERATOR_PLATFORM=x64"
-if /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" (
-    set "VCPKG_TRIPLET=arm64-windows"
-    set "CMAKE_GENERATOR_PLATFORM=ARM64"
-)
-if /I "%PROCESSOR_ARCHITECTURE%"=="x86" (
-    set "VCPKG_TRIPLET=x86-windows"
-    set "CMAKE_GENERATOR_PLATFORM=Win32"
-)
-
-echo Installing GLFW, GLM, and GLEW for %VCPKG_TRIPLET%...
-"%VCPKG_ROOT%\vcpkg.exe" install glfw3 glm glew --triplet %VCPKG_TRIPLET%
+"%MSYS2_ROOT%\usr\bin\bash.exe" -lc "pacman -Syu --noconfirm"
+if errorlevel 1 exit /b 1
+"%MSYS2_ROOT%\usr\bin\bash.exe" -lc "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-glfw mingw-w64-ucrt-x86_64-glm mingw-w64-ucrt-x86_64-glew"
 if errorlevel 1 exit /b 1
 
-set "CMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake"
+set "PATH=%MSYS2_ROOT%\ucrt64\bin;%MSYS2_ROOT%\usr\bin;%PATH%"
+set "CMAKE_EXE=%MSYS2_ROOT%\ucrt64\bin\cmake.exe"
 exit /b 0
 
 :clean
@@ -157,14 +169,14 @@ echo   scripts\manage.bat test [--auto]
 echo   scripts\manage.bat clean
 echo.
 echo Commands:
-echo   build    Configure and compile the project.
+echo   build    Configure and compile with GCC and Ninja.
 echo   run      Build and run the project.
 echo   test     Build and run the unit tests.
 echo   clean    Remove the build directory.
 echo.
 echo Options:
 echo   --single Copy the built executable into the project root (build/run only).
-echo   --auto   Install CMake, Visual Studio C++ Build Tools, and GLFW/GLM/GLEW with winget and vcpkg.
+echo   --auto   Install MSYS2 and the UCRT64 GCC/CMake/Ninja/GLFW/GLM/GLEW packages with winget and pacman.
 exit /b 0
 
 :usage_error
