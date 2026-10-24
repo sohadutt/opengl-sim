@@ -37,11 +37,15 @@
 *.exe
 *.out
 *.app
+/opengl-sim
 
 # Build directories
 build/
 Build/
 build-*/
+
+# Runtime logs
+logs/*.log
 
 # CMake generated files
 CMakeFiles/
