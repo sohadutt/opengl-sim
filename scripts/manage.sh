@@ -11,11 +11,13 @@ usage() {
 Usage:
   ./scripts/manage.sh build [--single]
   ./scripts/manage.sh run [--single]
+  ./scripts/manage.sh test
   ./scripts/manage.sh clean
 
 Commands:
   build    Configure and compile the project.
   run      Build and run the project.
+  test     Build and run the unit tests.
   clean    Remove the build directory.
 
 Options:
@@ -55,7 +57,7 @@ while (($# > 0)); do
 done
 
 case "$command_name" in
-    build|run)
+    build|run|test)
         cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
         cmake --build "$BUILD_DIR" --config Release --parallel
 
@@ -73,6 +75,11 @@ case "$command_name" in
         if [[ "$copy_single" == "true" ]]; then
             cp "$executable" "$ROOT_DIR/$executable_name"
             echo "Executable copied to $ROOT_DIR/$executable_name"
+        fi
+
+        if [[ "$command_name" == "test" ]]; then
+            ctest --test-dir "$BUILD_DIR" --output-on-failure
+            exit $?
         fi
 
         if [[ "$command_name" == "run" ]]; then

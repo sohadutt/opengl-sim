@@ -30,6 +30,8 @@ public:
     }
 
     void addButton(std::string label, std::function<void()> action);
+    void addToggle(std::string label, bool& value);
+    void setHeatmapLegend(std::string label);
     [[nodiscard]] bool initialize();
     void setPointerPosition(double x, double y) noexcept;
     [[nodiscard]] bool pointerOverPanel() const noexcept;
@@ -51,6 +53,11 @@ private:
         std::function<void()> action;
     };
 
+    struct Toggle {
+        std::string label;
+        bool* value = nullptr;
+    };
+
     void addSliderControl(std::string label, std::function<double()> get_value,
                           std::function<void(double)> set_value, double minimum,
                           double maximum, bool integral);
@@ -60,6 +67,8 @@ private:
     core::Logger& logger_;
     std::vector<Slider> sliders_;
     std::vector<Button> buttons_;
+    std::vector<Toggle> toggles_;
+    std::string heatmap_legend_;
     double pointer_x_ = 0.0;
     double pointer_y_ = 0.0;
     int dragging_slider_ = -1;

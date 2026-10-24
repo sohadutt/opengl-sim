@@ -1,4 +1,5 @@
 #include "opengl_sim/ui/user_interface.hpp"
+#include "opengl_sim/core/heatmap.hpp"
 
 #if defined(__APPLE__)
 #include <OpenGL/gl3.h>
@@ -178,6 +179,14 @@ void UserInterface::addButton(std::string label, std::function<void()> action) {
     buttons_.push_back({std::move(label), std::move(action)});
 }
 
+void UserInterface::addToggle(std::string label, bool& value) {
+    toggles_.push_back({std::move(label), &value});
+}
+
+void UserInterface::setHeatmapLegend(std::string label) {
+    heatmap_legend_ = std::move(label);
+}
+
 bool UserInterface::initialize() {
 #if !defined(__APPLE__)
     glewExperimental = GL_TRUE;
@@ -250,7 +259,9 @@ bool UserInterface::pointerOverPanel() const noexcept {
     constexpr double panel_top = 16.0;
     constexpr double panel_width = 300.0;
     constexpr double row_height = 52.0;
+    constexpr double toggle_height = 32.0;
     const auto panel_height = 54.0 + static_cast<double>(sliders_.size()) * row_height +
+                              static_cast<double>(toggles_.size()) * toggle_height +
                               static_cast<double>(buttons_.size()) * 40.0;
     return pointer_x_ >= panel_left && pointer_x_ <= panel_left + panel_width &&
            pointer_y_ >= panel_top && pointer_y_ <= panel_top + panel_height;
@@ -267,6 +278,7 @@ void UserInterface::onPrimaryButton(bool pressed) {
     constexpr double panel_width = 300.0;
     constexpr double padding = 12.0;
     constexpr double row_height = 52.0;
+    constexpr double toggle_height = 32.0;
     for (std::size_t i = 0; i < sliders_.size(); ++i) {
         const auto row_y = panel_y + 42.0 + static_cast<double>(i) * row_height;
         if (pointer_x_ >= panel_x + padding && pointer_x_ <= panel_x + panel_width - padding &&
@@ -277,7 +289,18 @@ void UserInterface::onPrimaryButton(bool pressed) {
         }
     }
 
-    const auto button_y = panel_y + 42.0 + static_cast<double>(sliders_.size()) * row_height + 4.0;
+    const auto toggle_y = panel_y + 42.0 + static_cast<double>(sliders_.size()) * row_height;
+    for (std::size_t i = 0; i < toggles_.size(); ++i) {
+        const auto top = toggle_y + static_cast<double>(i) * toggle_height;
+        if (pointer_x_ >= panel_x + padding && pointer_x_ <= panel_x + panel_width - padding &&
+            pointer_y_ >= top && pointer_y_ <= top + toggle_height) {
+            if (toggles_[i].value != nullptr) *toggles_[i].value = !*toggles_[i].value;
+            return;
+        }
+    }
+
+    const auto button_y = panel_y + 42.0 + static_cast<double>(sliders_.size()) * row_height +
+                          static_cast<double>(toggles_.size()) * toggle_height + 4.0;
     for (std::size_t i = 0; i < buttons_.size(); ++i) {
         const auto top = button_y + static_cast<double>(i) * 40.0;
         if (pointer_x_ >= panel_x + padding && pointer_x_ <= panel_x + panel_width - padding &&
@@ -310,7 +333,9 @@ void UserInterface::draw(int width, int height) {
     constexpr float panel_width = 300.0F;
     constexpr float padding = 12.0F;
     constexpr float row_height = 52.0F;
+    constexpr float toggle_height = 32.0F;
     const auto panel_height = 54.0F + static_cast<float>(sliders_.size()) * row_height +
+                              static_cast<float>(toggles_.size()) * toggle_height +
                               static_cast<float>(buttons_.size()) * 40.0F;
     std::vector<Vertex> vertices;
     vertices.reserve(8000);
@@ -346,7 +371,24 @@ void UserInterface::draw(int width, int height) {
                      {0.78F, 0.91F, 1.0F, 1.0F});
     }
 
-    const auto button_y = panel_y + 42.0F + static_cast<float>(sliders_.size()) * row_height + 4.0F;
+    const auto toggle_y = panel_y + 42.0F + static_cast<float>(sliders_.size()) * row_height;
+    for (std::size_t i = 0; i < toggles_.size(); ++i) {
+        const auto top = toggle_y + static_cast<float>(i) * toggle_height;
+        addText(vertices, toggles_[i].label, panel_x + padding, top + 8.0F, 3.0F,
+                {0.75F, 0.82F, 0.91F, 1.0F});
+        const auto enabled = toggles_[i].value != nullptr && *toggles_[i].value;
+        addRectangle(vertices, panel_x + panel_width - padding - 24.0F, top + 6.0F,
+                     20.0F, 20.0F,
+                     enabled ? std::array<float, 4>{0.16F, 0.62F, 0.91F, 1.0F}
+                             : std::array<float, 4>{0.13F, 0.18F, 0.25F, 1.0F});
+        if (enabled) {
+            addRectangle(vertices, panel_x + panel_width - padding - 19.0F, top + 11.0F,
+                         10.0F, 10.0F, {0.88F, 0.96F, 1.0F, 1.0F});
+        }
+    }
+
+    const auto button_y = panel_y + 42.0F + static_cast<float>(sliders_.size()) * row_height +
+                          static_cast<float>(toggles_.size()) * toggle_height + 4.0F;
     for (std::size_t i = 0; i < buttons_.size(); ++i) {
         const auto top = button_y + static_cast<float>(i) * 40.0F;
         const auto hovered = pointer_x_ >= panel_x + padding &&
@@ -357,6 +399,28 @@ void UserInterface::draw(int width, int height) {
                              : std::array<float, 4>{0.09F, 0.20F, 0.30F, 1.0F});
         addText(vertices, buttons_[i].label, panel_x + padding + 8.0F, top + 7.0F, 3.0F,
                 {0.86F, 0.93F, 1.0F, 1.0F});
+    }
+
+    if (!heatmap_legend_.empty() && width >= 230 && height >= 60) {
+        constexpr float legend_width = 180.0F;
+        constexpr float legend_height = 12.0F;
+        const auto legend_x = static_cast<float>(width) - legend_width - 20.0F;
+        const auto legend_y = static_cast<float>(height) - 42.0F;
+        addText(vertices, heatmap_legend_, legend_x, legend_y - 17.0F, 2.0F,
+                {0.80F, 0.87F, 0.96F, 1.0F});
+        constexpr int blocks = 45;
+        for (int block = 0; block < blocks; ++block) {
+            const auto heat = core::heatColor(
+                static_cast<float>(block) / static_cast<float>(blocks - 1));
+            const auto block_width = legend_width / static_cast<float>(blocks);
+            addRectangle(vertices, legend_x + static_cast<float>(block) * block_width,
+                         legend_y, block_width + 0.5F, legend_height,
+                         {heat[0], heat[1], heat[2], 1.0F});
+        }
+        addText(vertices, "COOL", legend_x, legend_y + 17.0F, 2.0F,
+                {0.58F, 0.67F, 0.78F, 1.0F});
+        addText(vertices, "HOT", legend_x + legend_width - 24.0F, legend_y + 17.0F,
+                2.0F, {0.58F, 0.67F, 0.78F, 1.0F});
     }
 
     glDisable(GL_DEPTH_TEST);

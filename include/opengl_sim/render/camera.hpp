@@ -16,6 +16,7 @@ public:
 
     [[nodiscard]] glm::mat4 viewMatrix() const noexcept;
     [[nodiscard]] glm::mat4 projectionMatrix(float aspect_ratio) const noexcept;
+    [[nodiscard]] glm::vec3 position() const noexcept { return position_; }
 
 private:
     void updateDirection() noexcept;

@@ -1,17 +1,28 @@
 #include "opengl_sim/app/application.hpp"
 #include "opengl_sim/physics/black_hole.hpp"
+#include "opengl_sim/physics/grid_plane.hpp"
+#include "opengl_sim/physics/light_particle_field.hpp"
+#include "opengl_sim/physics/planet.hpp"
 #include "opengl_sim/render/renderer.hpp"
 #include "opengl_sim/ui/user_interface.hpp"
 
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
-#include <cstdlib>
+#include <random>
+
+
 
 namespace opengl_sim::app {
 namespace {
 
 core::Logger *active_logger = nullptr;
+
+glm::vec3 randomPlanetColor() {
+  static std::mt19937 random_engine{std::random_device{}()};
+  static std::uniform_real_distribution<float> channel{0.15F, 0.95F};
+  return {channel(random_engine), channel(random_engine), channel(random_engine)};
+}
 
 void glfwErrorCallback(int error, const char *description) {
   if (active_logger != nullptr) {
@@ -134,11 +145,29 @@ int Application::run() {
       result = EXIT_FAILURE;
     } else {
       // Initial visual scale in simulation units; the UI can make this adjustable later.
-      physics::black_hole black_hole{{0.0, 0.0}, 1.0, 0.24, 0.5};
+      physics::black_hole black_hole{{0.0, 0.0, 0.0}, 1.0, 0.24, 0.5};
+      physics::light_particle_field particles;
+      physics::planet planet{{0.35, 0.12, -2.2}, 0.52, {0.16F, 0.58F, 0.95F}};
+      physics::grid_plane grid{{0.0, 0.0, 0.0}, 1.0, 10.0, 0.01, 0.5};
+      bool show_grid = true;
       render::Camera camera;
+      interface.addSlider("PLANET_SIZE", planet.radius, 0.1, 2.0);
+      interface.addButton("CHANGE PLANET COLOUR", [&planet] {
+        planet.color = randomPlanetColor();
+      });
+      interface.addSlider("GRID SPACING", grid.spacing, 0.1, 5.0);
+      interface.addSlider("GRID SIZE", grid.size, 1.0, 20.0);
+      interface.addSlider("GRID THICKNESS", grid.line_thickness, 0.002, 0.05);
+      interface.addSlider("GRID OPACITY", grid.line_opacity, 0.05, 1.0);
+      interface.addSlider("PARTICLE COUNT", particles.count, 1, 1'000'000);
+      interface.addSlider("PARTICLE SPEED", particles.speed, 0.1, 6.0);
+      interface.addSlider("PARTICLE SIZE", particles.size, 1.0, 12.0);
+      interface.addToggle("TRAILS", particles.trails_enabled);
       interface.addSlider("MASS", black_hole.mass, 0.1, 10.0);
       interface.addSlider("SPIN", black_hole.spin, -1.0, 1.0);
       interface.addSlider("EVENT HORIZON", black_hole.event_horizon, 0.05, 0.8);
+      interface.addToggle("GRID", show_grid);
+      interface.setHeatmapLegend("PARTICLE HEAT");
       interface.addButton("RESET BLACK HOLE", [&black_hole] {
         black_hole.mass = 1.0;
         black_hole.spin = 0.5;
@@ -151,7 +180,7 @@ int Application::run() {
       glfwSetMouseButtonCallback(window, mouseButtonCallback);
       glfwSetScrollCallback(window, scrollCallback);
       auto previous_frame_time = glfwGetTime();
-      logger_.info("Window created. Drag on the scene to look, scroll to zoom, Shift+scroll to pan. Drag sliders to edit the black hole.");
+      logger_.info("Window created. Drag on the scene to look, scroll to zoom, Shift+scroll to pan. Use the panel to edit the grid, particle field, and black hole.");
 
       while (glfwWindowShouldClose(window) == GLFW_FALSE) {
         glfwPollEvents();
@@ -178,11 +207,14 @@ int Application::run() {
           zoom_adjustment -= 1.5;
         }
         camera.adjustZoom(zoom_adjustment, delta_seconds);
+        particles.update(delta_seconds);
+        planet.update(delta_seconds);
 
         int framebuffer_width = 0;
         int framebuffer_height = 0;
         glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
-        renderer.draw(black_hole, camera, framebuffer_width, framebuffer_height);
+        renderer.draw(black_hole, grid, show_grid, particles, planet, camera,
+                      framebuffer_width, framebuffer_height);
         int window_width = 0;
         int window_height = 0;
         glfwGetWindowSize(window, &window_width, &window_height);

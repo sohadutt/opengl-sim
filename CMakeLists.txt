@@ -1,7 +1,14 @@
 cmake_minimum_required(VERSION 4.4)
 project(opengl-sim VERSION 0.1.0 LANGUAGES CXX)
 
+include(CTest)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+include(CheckIPOSupported)
+check_ipo_supported(RESULT SIMULATOR_IPO_SUPPORTED OUTPUT SIMULATOR_IPO_ERROR LANGUAGES CXX)
+if(SIMULATOR_IPO_SUPPORTED)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+endif()
 include(cmake/Dependencies.cmake)
 include(cmake/LocalGLFWRuntime.cmake)
 
@@ -26,7 +33,9 @@ configure_simulator_target(sim_core)
 
 # Physics data and calculations depend only on GLM.
 add_library(sim_physics STATIC
-    src/physics/black_hole.cpp
+    src/physics/grid_plane.cpp
+    src/physics/light_particle_field.cpp
+    src/physics/planet.cpp
 )
 configure_simulator_target(sim_physics)
 target_link_libraries(sim_physics PUBLIC "${GLM_TARGET}")
@@ -34,6 +43,7 @@ target_link_libraries(sim_physics PUBLIC "${GLM_TARGET}")
 # Rendering owns the camera and OpenGL drawing code.
 add_library(sim_render STATIC
     src/render/camera.cpp
+    src/render/particle_renderer.cpp
     src/render/renderer.cpp
 )
 configure_simulator_target(sim_render)
@@ -75,3 +85,12 @@ set_target_properties(opengl-sim PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
 )
 configure_local_glfw_runtime(opengl-sim)
+
+if(BUILD_TESTING)
+    add_executable(opengl-sim-tests
+        tests/simulator_tests.cpp
+    )
+    configure_simulator_target(opengl-sim-tests)
+    target_link_libraries(opengl-sim-tests PRIVATE sim_core sim_physics)
+    add_test(NAME simulator-unit-tests COMMAND opengl-sim-tests)
+endif()

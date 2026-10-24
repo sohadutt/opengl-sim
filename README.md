@@ -1,55 +1,60 @@
 # opengl-sim
 
-A C++23 GLFW/OpenGL project for exploring light around compact objects and atomic systems. It loads settings, logs startup errors, and renders a black hole with an event horizon and a stylized accretion ring.
+`opengl-sim` is a modular C++23 GLFW/OpenGL application for visual experiments with gravity and light. The current scene is fully 3D: a dark black-hole shadow, a gravity-warped grid, a colored planet shown through an approximate point-mass lens equation, and a thin glowing disk of orbiting light particles. Atomic and general simulation modules are planned placeholders.
+
+## Current features
+
+- Adjustable black-hole mass, spin, and event-horizon radius.
+- A near-black 3D shadow with a silhouette scaled to approximate the larger photon capture shadow.
+- A smoothly shaded, solid-color planet that forms primary and fainter mirrored images around the black hole when behind it.
+- A gravity-warped grid with controls for visibility, spacing, extent, thickness, and opacity.
+- Up to one million GPU-generated light particles orbit in a thin, glowing disk. Particle size is adjustable, with an optional fading trail.
+- Particle color shifts from deep red through orange and gold to white near the inner edge; the legend is shown in the scene window.
+- A modular UI, camera controls, settings file, and level-filtered logging.
+
+The visual model is qualitative. A depth-tested screen-space pass bends camera rays through a point-mass lens equation, so the planet and light disk appear through the black hole together. It does not integrate full general-relativistic paths. Heat colors do not represent calibrated temperatures, and particle orbits are approximate. `physics::G` and `physics::c` are defined in `include/opengl_sim/physics/constants.hpp`, but the current visualization uses scaled simulation units.
 
 ## Requirements
 
-- CMake 4.4 or newer
-- A C++23-capable compiler (MSVC, GCC, or Clang)
-- Bash to use the management script (macOS/Linux, or Git Bash on Windows)
-- GLEW on Linux and Windows; macOS uses the system OpenGL framework
+- CMake 4.4 or newer.
+- A C++23 compiler: Clang/AppleClang, GCC, or MSVC.
+- GLFW 3.3 or newer and GLM.
+- GLEW on Linux and Windows. macOS uses the system OpenGL framework.
+- Bash for `scripts/manage.sh` (available by default on macOS/Linux and through Git Bash on Windows).
 
-GLFW headers and the library are under `third_party/glfw/`. The included `libglfw.3.5.dylib` is a macOS arm64 build; other platforms need a compatible GLFW library there or an installed GLFW 3.3+ CMake package.
-
-## Project layout
-
-```text
-config/                      Runtime settings
-cmake/                       Dependency discovery and platform setup
-include/opengl_sim/
-  app/                       Application interface
-  core/                      Settings and logging interfaces
-  physics/                   Simulation models and constants
-  render/                    Renderer and camera interfaces
-  ui/                        Reusable buttons and sliders
-src/                         Implementations, grouped by module
-assets/shaders/              Shader files for future renderer assets
-scripts/manage.sh            Configure, build, run, and clean
-third_party/glfw/            Optional project-local GLFW copy
-```
-
-CMake builds reusable `sim_core`, `sim_physics`, `sim_render`, and `sim_ui` modules. The `opengl-sim` executable connects them in `src/app/`. New implementation files should be added to their module's source list in `CMakeLists.txt`.
-
-`config/simulator.conf` contains startup settings. Logs are written to `logs/simulator.log`. The empty atom, light-ray, and simulation files under `physics/` are placeholders for future modules.
-
-The black hole is currently a visual model; light bending, atomic simulation, and UI controls are not implemented yet. The speed of light is defined as a constant in `include/opengl_sim/physics/constants.hpp`.
-
-The window includes a black-hole panel with sliders for mass, spin, and event-horizon size plus a reset button. Drag sliders with the left mouse button. Drag on the scene to look around, scroll to zoom, and use **Shift+scroll** to pan. **WASD** flies, **E/Q** moves vertically, and **+/-** changes the field of view. Press **Escape** to quit. These pointer gestures work with a mouse or trackpad.
-
-`ui::UserInterface` is simulation-independent. Register numeric values with `addSlider`; it supports both floating-point and integer values, so later controls such as particle count can use the same widget system. The app binds the current black-hole controls to its model.
-
-Set `app.log_level` in the config file to `trace`, `debug`, `info`, `warning`, `error`, `critical`, or `off`.
-
-## Build with CMake
-
-From the project root, configure and compile:
+On macOS with Homebrew:
 
 ```sh
-cmake -S . -B build
-cmake --build build --config Release
+brew install cmake glfw glm
 ```
 
-Run the resulting program:
+On Debian or Ubuntu:
+
+```sh
+sudo apt install cmake build-essential libglfw3-dev libglm-dev libglew-dev libgl1-mesa-dev
+```
+
+The CMake dependency setup first checks for a compatible project-local GLFW copy under `third_party/glfw/`, then checks for a system GLFW package. On macOS it also checks Homebrew's package prefix. The checked-in `third_party/glfw/lib/libglfw.3.5.dylib` is a macOS arm64 runtime library; other systems need their own compatible GLFW installation.
+
+## Build and run
+
+From the project root, the management script configures a Release build and compiles it:
+
+```sh
+./scripts/manage.sh build
+./scripts/manage.sh run
+./scripts/manage.sh test
+```
+
+To configure and build directly with CMake:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+ctest --test-dir build --output-on-failure
+```
+
+Run the executable from the project root so relative runtime paths such as the log file resolve as expected:
 
 ```sh
 # macOS / Linux
@@ -59,21 +64,64 @@ Run the resulting program:
 .\build\opengl-sim.exe
 ```
 
-## Use the management script
-
-The shell script configures and builds the project, runs it, or removes build output:
+The management scripts support cleanup and placing a copy of the executable in the project root. On Windows, use the batch version from Command Prompt:
 
 ```sh
-./scripts/manage.sh build
-./scripts/manage.sh run
 ./scripts/manage.sh clean
-```
-
-To also copy the built executable into the project root, use `--single`:
-
-```sh
 ./scripts/manage.sh build --single
+./scripts/manage.sh run --single
 ```
 
-This creates `opengl-sim` on macOS/Linux or `opengl-sim.exe` on Windows. The root copy is ignored by Git.
-On Windows, run these commands from Git Bash.
+```bat
+scripts\manage.bat build
+scripts\manage.bat run
+scripts\manage.bat test
+scripts\manage.bat clean
+scripts\manage.bat build --single
+```
+
+`--single` copies the built program to the project root for convenience. It does not bundle GLFW or other shared libraries. The Windows script accepts `--auto` on `build` and `run` to use winget and vcpkg to install CMake, Visual Studio C++ Build Tools, GLFW, GLM, and GLEW, then configure, build, and (for `run`) start the app:
+
+```bat
+scripts\manage.bat build --auto
+scripts\manage.bat run --auto --single
+```
+
+`--auto` requires Windows Package Manager (`winget`) and an internet connection. Visual Studio Build Tools installation may require administrator approval and a large download. The vcpkg checkout and libraries are stored under `%LOCALAPPDATA%\opengl-sim\vcpkg` unless `VCPKG_ROOT` points to an existing vcpkg installation.
+
+## Controls
+
+The left panel contains sliders for grid settings, particle count and speed, and black-hole mass, spin, and event-horizon radius. Use the **GRID** toggle to show or hide the grid, and **RESET BLACK HOLE** to restore the black-hole defaults. Drag sliders with the left mouse button.
+
+- Drag the scene with the left mouse button to look around.
+- Drag with the right mouse button to look around while over the controls.
+- Scroll to zoom; hold **Shift** while scrolling to pan.
+- **W/A/S/D** move the camera horizontally; **E/Q** move vertically.
+- **+/-** changes the field of view.
+- **Escape** exits.
+
+Mouse and trackpad gestures use GLFW pointer and scroll events.
+
+## Settings and logs
+
+Edit [`config/simulator.conf`](config/simulator.conf) to change the startup log level, log file, window dimensions, title, or vertical sync. Supported log levels are `trace`, `debug`, `info`, `warning`, `error`, `critical`, and `off`. Logs are appended to `logs/simulator.log` by default; the application creates the log directory if needed.
+
+## Project structure
+
+```text
+config/                       Runtime settings
+docs/                         Architecture, simulation, and development guides
+include/opengl_sim/
+  app/                         Application interface
+  core/                        Settings, logging, and shared utilities
+  physics/                     Black hole, grid, planet, particle field, and future models
+  render/                      OpenGL renderer and camera interfaces
+  ui/                          Reusable on-screen controls
+src/                           Implementations, grouped by module
+assets/shaders/                Shader assets
+scripts/manage.sh              Configure, build, run, and clean
+third_party/glfw/              Optional/local GLFW runtime library
+CMakeLists.txt                 Build targets and module dependencies
+```
+
+CMake builds `sim_core`, `sim_physics`, `sim_render`, and `sim_ui` as static libraries. The `opengl-sim` executable composes these modules in `src/app/`. See the [architecture guide](docs/architecture.md), [simulation notes](docs/simulation.md), and [development guide](docs/development.md) for details.
