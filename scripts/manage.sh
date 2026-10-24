@@ -15,7 +15,7 @@ Usage:
   ./scripts/manage.sh clean
 
 Commands:
-  build    Configure and compile the project.
+  build    Configure and compile the root C++/OpenGL project.
   run      Build and run the project.
   test     Build and run the unit tests.
   clean    Remove the build directory.

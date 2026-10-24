@@ -9,9 +9,6 @@
 #include "opengl_sim/ui/user_interface.hpp"
 
 #include <GLFW/glfw3.h>
-
-#include <algorithm>
-#include <cmath>
 #include <random>
 
 

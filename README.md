@@ -159,3 +159,7 @@ CMakeLists.txt                 Build targets and module dependencies
 ```
 
 CMake builds `sim_core`, `sim_physics`, `sim_render`, and `sim_ui` as static libraries. The `opengl-sim` executable composes these modules in `src/app/`. See the [architecture guide](docs/architecture.md), [simulation notes](docs/simulation.md), and [development guide](docs/development.md) for details.
+
+## Metal version
+
+An independent Swift and Metal 4 version for macOS lives in [`metal/`](metal/). The root project remains the C++/OpenGL application; see [`metal/README.md`](metal/README.md) for its separate build and run instructions.
