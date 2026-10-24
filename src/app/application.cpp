@@ -1,5 +1,7 @@
 #include "opengl_sim/app/application.hpp"
+#include "opengl_sim/physics/atom.hpp"
 #include "opengl_sim/physics/black_hole.hpp"
+#include "opengl_sim/physics/constants.hpp"
 #include "opengl_sim/physics/grid_plane.hpp"
 #include "opengl_sim/physics/light_particle_field.hpp"
 #include "opengl_sim/physics/planet.hpp"
@@ -9,12 +11,15 @@
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
+#include <cmath>
 #include <random>
 
 
 
 namespace opengl_sim::app {
 namespace {
+
+enum class SimulationMode { selection, celestial, atomic };
 
 core::Logger *active_logger = nullptr;
 
@@ -147,32 +152,117 @@ int Application::run() {
       // Initial visual scale in simulation units; the UI can make this adjustable later.
       physics::black_hole black_hole{{0.0, 0.0, 0.0}, 1.0, 0.24, 0.5};
       physics::light_particle_field particles;
-      physics::planet planet{{0.35, 0.12, -2.2}, 0.52, {0.16F, 0.58F, 0.95F}};
+      physics::atom atom_model;
+      std::vector<physics::planet> planets;
+      physics::planet first_planet{{0.35, 0.12, -2.2}, 0.52, {0.16F, 0.58F, 0.95F}};
+      first_planet.velocity = {0.37, 0.0, 0.06};
+      planets.push_back(first_planet);
+      std::size_t selected_planet = 0;
+      constexpr std::size_t maximum_planets = 32;
       physics::grid_plane grid{{0.0, 0.0, 0.0}, 1.0, 10.0, 0.01, 0.5};
       bool show_grid = true;
       render::Camera camera;
-      interface.addSlider("PLANET_SIZE", planet.radius, 0.1, 2.0);
-      interface.addButton("CHANGE PLANET COLOUR", [&planet] {
-        planet.color = randomPlanetColor();
-      });
-      interface.addSlider("GRID SPACING", grid.spacing, 0.1, 5.0);
-      interface.addSlider("GRID SIZE", grid.size, 1.0, 20.0);
-      interface.addSlider("GRID THICKNESS", grid.line_thickness, 0.002, 0.05);
-      interface.addSlider("GRID OPACITY", grid.line_opacity, 0.05, 1.0);
-      interface.addSlider("PARTICLE COUNT", particles.count, 1, 1'000'000);
-      interface.addSlider("PARTICLE SPEED", particles.speed, 0.1, 6.0);
-      interface.addSlider("PARTICLE SIZE", particles.size, 1.0, 12.0);
-      interface.addToggle("TRAILS", particles.trails_enabled);
-      interface.addSlider("MASS", black_hole.mass, 0.1, 10.0);
-      interface.addSlider("SPIN", black_hole.spin, -1.0, 1.0);
-      interface.addSlider("EVENT HORIZON", black_hole.event_horizon, 0.05, 0.8);
-      interface.addToggle("GRID", show_grid);
-      interface.setHeatmapLegend("PARTICLE HEAT");
-      interface.addButton("RESET BLACK HOLE", [&black_hole] {
-        black_hole.mass = 1.0;
-        black_hole.spin = 0.5;
-        black_hole.event_horizon = 0.24;
-      });
+      auto current_mode = SimulationMode::selection;
+      auto requested_mode = SimulationMode::selection;
+      const auto configure_interface = [&] {
+        interface.clearControls();
+        if (current_mode == SimulationMode::selection) {
+          interface.setPanelTitle("CHOOSE SIMULATION");
+          interface.addInfo([] { return "SELECT A MODE TO START"; });
+          interface.addButton("CELESTIAL MODE", [&requested_mode] {
+            requested_mode = SimulationMode::celestial;
+          });
+          interface.addButton("ATOMIC MODE", [&requested_mode] {
+            requested_mode = SimulationMode::atomic;
+          });
+        } else if (current_mode == SimulationMode::celestial) {
+          interface.setPanelTitle("CELESTIAL MODE");
+          interface.addSlider("PLANET SIZE", [&] {
+            return planets.empty() ? 0.52 : planets[selected_planet].radius;
+          }, [&](double value) {
+            if (!planets.empty()) planets[selected_planet].radius = value;
+          }, 0.1, 2.0);
+          interface.addSlider("PLANET MASS", [&] {
+            return planets.empty() ? 0.04 : planets[selected_planet].mass;
+          }, [&](double value) {
+            if (!planets.empty()) planets[selected_planet].mass = value;
+          }, 0.005, 0.25);
+          interface.addInfo([&] {
+            return planets.empty() ? std::string{"NO PLANETS"} :
+                std::string{"PLANET "} + std::to_string(selected_planet + 1) + "/" +
+                    std::to_string(planets.size());
+          });
+          interface.addButton("ADD PLANET", [&] {
+            if (planets.size() >= maximum_planets) return;
+            const auto index = planets.size();
+            const auto angle = static_cast<double>(index) * 2.399963229728653;
+            const auto distance = 2.2 + 0.35 * static_cast<double>(index % 6);
+            physics::planet body;
+            body.position = black_hole.position + glm::dvec3{
+                std::cos(angle) * distance, 0.15 * static_cast<double>(index % 3),
+                std::sin(angle) * distance};
+            const auto orbital_speed = std::sqrt(physics::scaled_celestial_G *
+                                                 std::max(black_hole.mass, 0.05) / distance);
+            body.velocity = {-std::sin(angle) * orbital_speed, 0.0,
+                             std::cos(angle) * orbital_speed};
+            body.color = randomPlanetColor();
+            planets.push_back(body);
+            selected_planet = planets.size() - 1;
+          });
+          interface.addButton("NEXT PLANET", [&] {
+            if (!planets.empty()) selected_planet = (selected_planet + 1) % planets.size();
+          });
+          interface.addButton("CHANGE PLANET COLOUR", [&] {
+            if (!planets.empty()) planets[selected_planet].color = randomPlanetColor();
+          });
+          interface.addSlider("GRID SPACING", grid.spacing, 0.1, 5.0);
+          interface.addSlider("GRID SIZE", grid.size, 1.0, 20.0);
+          interface.addSlider("GRID THICKNESS", grid.line_thickness, 0.002, 0.05);
+          interface.addSlider("GRID OPACITY", grid.line_opacity, 0.05, 1.0);
+          interface.addSlider("PARTICLE COUNT", particles.count, 1, 1'000'000);
+          interface.addSlider("PARTICLE SPEED", particles.speed, 0.1, 6.0);
+          interface.addSlider("PARTICLE SIZE", particles.size, 1.0, 12.0);
+          interface.addToggle("TRAILS", particles.trails_enabled);
+          interface.addSlider("MASS", black_hole.mass, 0.1, 10.0);
+          interface.addSlider("SPIN", black_hole.spin, -1.0, 1.0);
+          interface.addSlider("EVENT HORIZON", black_hole.event_horizon, 0.05, 0.8);
+          interface.addToggle("GRID", show_grid);
+          interface.setHeatmapLegend("PARTICLE HEAT");
+          interface.addButton("RESET BLACK HOLE", [&black_hole] {
+            black_hole.mass = 1.0;
+            black_hole.spin = 0.5;
+            black_hole.event_horizon = 0.24;
+            black_hole.velocity = {};
+          });
+        } else {
+          interface.setPanelTitle("ATOMIC MODE");
+          interface.addSlider("ELECTRONS", atom_model.electron_count, 0, 118);
+          interface.addSlider("PROTONS", atom_model.proton_count, 1, 118);
+          interface.addSlider("NEUTRONS", atom_model.neutron_count, 0, 300);
+          interface.addInfo([] { return "ELECTRON -1.60218E-19C"; });
+          interface.addInfo([] { return "PROTON +1.60218E-19C"; });
+          interface.addInfo([] { return "NEUTRON 0C"; });
+          interface.addInfo([&atom_model] {
+            const auto charge = atom_model.net_charge_number();
+            return std::string{"NET CHARGE "} + (charge >= 0 ? "+" : "") +
+                   std::to_string(charge) + "E";
+          });
+          interface.addInfo([&atom_model] {
+            if (atom_model.electron_count == 0) return std::string{"NO ELECTRON CLOUD"};
+            if (atom_model.electron_count > atom_model.proton_count) {
+              return std::string{"NEGATIVE ION IS APPROXIMATE"};
+            }
+            return std::string{"SCREENED GROUND STATE"};
+          });
+          interface.addInfo([] { return "CLOUD IS A PROBABILITY"; });
+          interface.addInfo([] { return "NUCLEUS IS NOT TO SCALE"; });
+          interface.setHeatmapLegend("ELECTRON PROBABILITY");
+          interface.addButton("BACK TO MODE SELECT", [&requested_mode] {
+            requested_mode = SimulationMode::selection;
+          });
+        }
+      };
+      configure_interface();
 
       WindowInput input{&camera, &interface};
       glfwSetWindowUserPointer(window, &input);
@@ -180,10 +270,14 @@ int Application::run() {
       glfwSetMouseButtonCallback(window, mouseButtonCallback);
       glfwSetScrollCallback(window, scrollCallback);
       auto previous_frame_time = glfwGetTime();
-      logger_.info("Window created. Drag on the scene to look, scroll to zoom, Shift+scroll to pan. Use the panel to edit the grid, particle field, and black hole.");
+      logger_.info("Choose celestial or atomic mode in the panel. Drag on the scene to look, scroll to zoom, and Shift+scroll to pan.");
 
       while (glfwWindowShouldClose(window) == GLFW_FALSE) {
         glfwPollEvents();
+        if (requested_mode != current_mode) {
+          current_mode = requested_mode;
+          configure_interface();
+        }
         const auto current_frame_time = glfwGetTime();
         const auto delta_seconds = std::min(current_frame_time - previous_frame_time, 0.1);
         previous_frame_time = current_frame_time;
@@ -207,14 +301,24 @@ int Application::run() {
           zoom_adjustment -= 1.5;
         }
         camera.adjustZoom(zoom_adjustment, delta_seconds);
-        particles.update(delta_seconds);
-        planet.update(delta_seconds);
+        if (current_mode == SimulationMode::celestial) {
+          particles.update(delta_seconds);
+          physics::advanceCelestialSystem(black_hole, planets, delta_seconds);
+          if (planets.empty()) selected_planet = 0;
+          else if (selected_planet >= planets.size()) selected_planet = planets.size() - 1;
+        }
 
         int framebuffer_width = 0;
         int framebuffer_height = 0;
         glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
-        renderer.draw(black_hole, grid, show_grid, particles, planet, camera,
-                      framebuffer_width, framebuffer_height);
+        if (current_mode == SimulationMode::selection) {
+          renderer.drawSelection(framebuffer_width, framebuffer_height);
+        } else if (current_mode == SimulationMode::atomic) {
+          renderer.drawAtomic(atom_model, camera, framebuffer_width, framebuffer_height);
+        } else {
+          renderer.draw(black_hole, grid, show_grid, particles, planets, camera,
+                        framebuffer_width, framebuffer_height);
+        }
         int window_width = 0;
         int window_height = 0;
         glfwGetWindowSize(window, &window_width, &window_height);

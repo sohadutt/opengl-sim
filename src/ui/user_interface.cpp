@@ -175,12 +175,36 @@ void UserInterface::addSliderControl(std::string label, std::function<double()> 
                         minimum, maximum, integral});
 }
 
+void UserInterface::addSlider(std::string label, std::function<double()> get_value,
+                              std::function<void(double)> set_value, double minimum,
+                              double maximum) {
+    addSliderControl(std::move(label), std::move(get_value), std::move(set_value),
+                     minimum, maximum, false);
+}
+
 void UserInterface::addButton(std::string label, std::function<void()> action) {
     buttons_.push_back({std::move(label), std::move(action)});
 }
 
 void UserInterface::addToggle(std::string label, bool& value) {
     toggles_.push_back({std::move(label), &value});
+}
+
+void UserInterface::addInfo(std::function<std::string()> text) {
+    info_labels_.push_back({std::move(text)});
+}
+
+void UserInterface::clearControls() {
+    sliders_.clear();
+    buttons_.clear();
+    toggles_.clear();
+    info_labels_.clear();
+    heatmap_legend_.clear();
+    dragging_slider_ = -1;
+}
+
+void UserInterface::setPanelTitle(std::string title) {
+    panel_title_ = std::move(title);
 }
 
 void UserInterface::setHeatmapLegend(std::string label) {
@@ -260,8 +284,10 @@ bool UserInterface::pointerOverPanel() const noexcept {
     constexpr double panel_width = 300.0;
     constexpr double row_height = 52.0;
     constexpr double toggle_height = 32.0;
+    constexpr double info_height = 26.0;
     const auto panel_height = 54.0 + static_cast<double>(sliders_.size()) * row_height +
                               static_cast<double>(toggles_.size()) * toggle_height +
+                              static_cast<double>(info_labels_.size()) * info_height +
                               static_cast<double>(buttons_.size()) * 40.0;
     return pointer_x_ >= panel_left && pointer_x_ <= panel_left + panel_width &&
            pointer_y_ >= panel_top && pointer_y_ <= panel_top + panel_height;
@@ -279,6 +305,7 @@ void UserInterface::onPrimaryButton(bool pressed) {
     constexpr double padding = 12.0;
     constexpr double row_height = 52.0;
     constexpr double toggle_height = 32.0;
+    constexpr double info_height = 26.0;
     for (std::size_t i = 0; i < sliders_.size(); ++i) {
         const auto row_y = panel_y + 42.0 + static_cast<double>(i) * row_height;
         if (pointer_x_ >= panel_x + padding && pointer_x_ <= panel_x + panel_width - padding &&
@@ -299,8 +326,10 @@ void UserInterface::onPrimaryButton(bool pressed) {
         }
     }
 
-    const auto button_y = panel_y + 42.0 + static_cast<double>(sliders_.size()) * row_height +
-                          static_cast<double>(toggles_.size()) * toggle_height + 4.0;
+    const auto info_y = panel_y + 42.0 + static_cast<double>(sliders_.size()) * row_height +
+                        static_cast<double>(toggles_.size()) * toggle_height + 4.0;
+    const auto button_y = info_y + static_cast<double>(info_labels_.size()) * info_height;
+    static_cast<void>(button_y);
     for (std::size_t i = 0; i < buttons_.size(); ++i) {
         const auto top = button_y + static_cast<double>(i) * 40.0;
         if (pointer_x_ >= panel_x + padding && pointer_x_ <= panel_x + panel_width - padding &&
@@ -334,8 +363,10 @@ void UserInterface::draw(int width, int height) {
     constexpr float padding = 12.0F;
     constexpr float row_height = 52.0F;
     constexpr float toggle_height = 32.0F;
+    constexpr float info_height = 26.0F;
     const auto panel_height = 54.0F + static_cast<float>(sliders_.size()) * row_height +
                               static_cast<float>(toggles_.size()) * toggle_height +
+                              static_cast<float>(info_labels_.size()) * info_height +
                               static_cast<float>(buttons_.size()) * 40.0F;
     std::vector<Vertex> vertices;
     vertices.reserve(8000);
@@ -343,7 +374,7 @@ void UserInterface::draw(int width, int height) {
                  {0.025F, 0.038F, 0.065F, 0.94F});
     addRectangle(vertices, panel_x, panel_y, panel_width, 3.0F,
                  {0.20F, 0.67F, 0.95F, 1.0F});
-    addText(vertices, "BLACK HOLE", panel_x + padding, panel_y + 10.0F, 3.0F,
+    addText(vertices, panel_title_, panel_x + padding, panel_y + 10.0F, 3.0F,
             {0.88F, 0.94F, 1.0F, 1.0F});
 
     for (std::size_t i = 0; i < sliders_.size(); ++i) {
@@ -387,8 +418,16 @@ void UserInterface::draw(int width, int height) {
         }
     }
 
-    const auto button_y = panel_y + 42.0F + static_cast<float>(sliders_.size()) * row_height +
-                          static_cast<float>(toggles_.size()) * toggle_height + 4.0F;
+    const auto info_y = panel_y + 42.0F + static_cast<float>(sliders_.size()) * row_height +
+                        static_cast<float>(toggles_.size()) * toggle_height + 4.0F;
+    for (std::size_t i = 0; i < info_labels_.size(); ++i) {
+        const auto text = info_labels_[i].text ? info_labels_[i].text() : std::string{};
+        addText(vertices, text, panel_x + padding,
+                info_y + static_cast<float>(i) * info_height, 2.5F,
+                {0.62F, 0.75F, 0.88F, 1.0F});
+    }
+
+    const auto button_y = info_y + static_cast<float>(info_labels_.size()) * info_height;
     for (std::size_t i = 0; i < buttons_.size(); ++i) {
         const auto top = button_y + static_cast<float>(i) * 40.0F;
         const auto hovered = pointer_x_ >= panel_x + padding &&

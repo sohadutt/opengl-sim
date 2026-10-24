@@ -1,6 +1,5 @@
 #include "opengl_sim/physics/grid_plane.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 

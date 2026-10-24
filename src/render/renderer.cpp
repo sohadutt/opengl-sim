@@ -172,7 +172,8 @@ const std::vector<Vertex>& unitSphereMesh() {
 
 } // namespace
 
-Renderer::Renderer(core::Logger& logger) noexcept : logger_(logger), particle_renderer_(logger) {}
+Renderer::Renderer(core::Logger& logger) noexcept
+    : logger_(logger), particle_renderer_(logger), atom_renderer_(logger) {}
 Renderer::~Renderer() { release(); }
 
 std::uint32_t Renderer::compileShader(std::uint32_t type, const char* source) {
@@ -194,6 +195,7 @@ std::uint32_t Renderer::compileShader(std::uint32_t type, const char* source) {
 }
 
 bool Renderer::initialize() {
+    logger_.info("Initializing the OpenGL scene renderer.");
 #if !defined(__APPLE__)
     glewExperimental = GL_TRUE;
     const auto status = glewInit();
@@ -206,6 +208,9 @@ bool Renderer::initialize() {
 #endif
 
     if (!particle_renderer_.initialize()) return false;
+    logger_.info("GPU light-particle renderer initialized.");
+    if (!atom_renderer_.initialize()) return false;
+    logger_.info("GPU atomic probability renderer initialized.");
 
     const auto vertex_shader = compileShader(GL_VERTEX_SHADER, vertex_shader_source);
     const auto fragment_shader = compileShader(GL_FRAGMENT_SHADER, fragment_shader_source);
@@ -356,7 +361,7 @@ bool Renderer::ensureRenderTarget(int width, int height) {
 
 void Renderer::draw(const physics::black_hole& black_hole,
                     const physics::grid_plane& grid_plane, bool show_grid,
-                    const physics::light_particle_field& particles, const physics::planet& planet,
+                    const physics::light_particle_field& particles, const std::vector<physics::planet>& planets,
                     const Camera& camera,
                     int width, int height) {
     if (!initialized_ || width <= 0 || height <= 0 || !ensureRenderTarget(width, height)) return;
@@ -384,9 +389,13 @@ void Renderer::draw(const physics::black_hole& black_hole,
                                       ? lens_center_clip.w : 0.0001F);
     const auto camera_position = camera.position();
     const auto lens_distance = glm::length(camera_position - lens_center_world);
-    const auto source_distance = glm::length(camera_position - glm::vec3{
-        static_cast<float>(planet.position.x), static_cast<float>(planet.position.y),
-        static_cast<float>(planet.position.z)});
+    float source_distance = lens_distance;
+    for (const auto& planet : planets) {
+        const auto distance = glm::length(camera_position - glm::vec3{
+            static_cast<float>(planet.position.x), static_cast<float>(planet.position.y),
+            static_cast<float>(planet.position.z)});
+        if (distance > lens_distance + 0.01F) source_distance = std::max(source_distance, distance);
+    }
     const auto source_behind_lens = source_distance > lens_distance + 0.01F &&
                                     lens_center_clip.w > 0.0F;
     const auto horizon = static_cast<float>(std::max(black_hole.event_horizon, 0.01));
@@ -459,16 +468,18 @@ void Renderer::draw(const physics::black_hole& black_hole,
     }
 
     // Draw the scene normally. The post-process bends its camera rays afterward.
-    const auto planet_transform =
-        glm::translate(glm::mat4{1.0F}, glm::vec3{static_cast<float>(planet.position.x),
-                                                  static_cast<float>(planet.position.y),
-                                                  static_cast<float>(planet.position.z)}) *
-        glm::rotate(glm::mat4{1.0F}, static_cast<float>(planet.rotation), glm::vec3{0.0F, 1.0F, 0.0F}) *
-        glm::scale(glm::mat4{1.0F}, glm::vec3{static_cast<float>(planet.radius)});
-    glUniformMatrix4fv(model_matrix_uniform_, 1, GL_FALSE, glm::value_ptr(planet_transform));
     glUniform1i(planet_material_uniform_, GL_TRUE);
-    glUniform3fv(planet_color_uniform_, 1, glm::value_ptr(planet.color));
-    upload_and_draw(unitSphereMesh(), GL_TRIANGLES, {1.0F, 1.0F, 1.0F, 1.0F}, false, true);
+    for (const auto& planet : planets) {
+        const auto planet_transform =
+            glm::translate(glm::mat4{1.0F}, glm::vec3{static_cast<float>(planet.position.x),
+                                                      static_cast<float>(planet.position.y),
+                                                      static_cast<float>(planet.position.z)}) *
+            glm::rotate(glm::mat4{1.0F}, static_cast<float>(planet.rotation), glm::vec3{0.0F, 1.0F, 0.0F}) *
+            glm::scale(glm::mat4{1.0F}, glm::vec3{static_cast<float>(planet.radius)});
+        glUniformMatrix4fv(model_matrix_uniform_, 1, GL_FALSE, glm::value_ptr(planet_transform));
+        glUniform3fv(planet_color_uniform_, 1, glm::value_ptr(planet.color));
+        upload_and_draw(unitSphereMesh(), GL_TRIANGLES, {1.0F, 1.0F, 1.0F, 1.0F}, false, true);
+    }
     glUniform1i(planet_material_uniform_, GL_FALSE);
 
     // Particles own their shader and empty VAO; the scene program stays focused
@@ -517,6 +528,28 @@ void Renderer::draw(const physics::black_hole& black_hole,
     glEnable(GL_DEPTH_TEST);
 }
 
+void Renderer::drawAtomic(const physics::atom& atom, const Camera& camera,
+                          int width, int height) {
+    if (!initialized_ || width <= 0 || height <= 0) return;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, width, height);
+    glClearColor(0.006F, 0.009F, 0.018F, 1.0F);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    const auto aspect = static_cast<float>(width) / static_cast<float>(height);
+    const auto view_projection = camera.projectionMatrix(aspect) * camera.viewMatrix();
+    atom_renderer_.draw(atom, view_projection);
+}
+
+void Renderer::drawSelection(int width, int height) const noexcept {
+    if (!initialized_ || width <= 0 || height <= 0) return;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, width, height);
+    glClearColor(0.006F, 0.009F, 0.018F, 1.0F);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
 void Renderer::release() noexcept {
     const auto buffer = static_cast<GLuint>(vertex_buffer_);
     const auto array = static_cast<GLuint>(vertex_array_);
@@ -544,6 +577,7 @@ void Renderer::release() noexcept {
     lensing_program_ = 0;
     initialized_ = false;
     particle_renderer_.release();
+    atom_renderer_.release();
 }
 
 } // namespace opengl_sim::render

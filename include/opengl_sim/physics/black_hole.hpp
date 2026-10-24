@@ -9,6 +9,7 @@ struct black_hole {
     double mass{};
     double event_horizon{};
     double spin{};
+    glm::dvec3 velocity{};
 };
 
 } // namespace opengl_sim::physics

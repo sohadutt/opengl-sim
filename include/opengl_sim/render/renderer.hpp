@@ -1,14 +1,17 @@
 #pragma once
 
 #include "opengl_sim/core/logger.hpp"
+#include "opengl_sim/physics/atom.hpp"
 #include "opengl_sim/physics/black_hole.hpp"
 #include "opengl_sim/physics/grid_plane.hpp"
 #include "opengl_sim/physics/light_particle_field.hpp"
 #include "opengl_sim/physics/planet.hpp"
 #include "opengl_sim/render/camera.hpp"
+#include "opengl_sim/render/atom_renderer.hpp"
 #include "opengl_sim/render/particle_renderer.hpp"
 
 #include <cstdint>
+#include <vector>
 
 namespace opengl_sim::render {
 
@@ -23,9 +26,12 @@ public:
     [[nodiscard]] bool initialize();
     void draw(const physics::black_hole& black_hole,
               const physics::grid_plane& grid, bool show_grid,
-              const physics::light_particle_field& particles, const physics::planet& planet,
+              const physics::light_particle_field& particles, const std::vector<physics::planet>& planets,
               const Camera& camera,
               int width, int height);
+    void drawAtomic(const physics::atom& atom, const Camera& camera,
+                    int width, int height);
+    void drawSelection(int width, int height) const noexcept;
 
 private:
     [[nodiscard]] std::uint32_t compileShader(std::uint32_t type, const char* source);
@@ -61,6 +67,7 @@ private:
     int background_color_uniform_ = -1;
     int viewport_size_uniform_ = -1;
     ParticleRenderer particle_renderer_;
+    AtomRenderer atom_renderer_;
     bool initialized_ = false;
 };
 

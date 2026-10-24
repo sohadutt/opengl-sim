@@ -7,23 +7,23 @@ The project is split into four libraries and one executable. The libraries own a
 | Target | Responsibilities | Dependencies |
 | --- | --- | --- |
 | `sim_core` | Parse `config/simulator.conf`; provide `Settings` and the thread-safe, level-filtered logger. | C++ standard library |
-| `sim_physics` | Store the 3D black-hole, grid, planet, and particle-emitter models; generate grid lines and advance animation. | GLM |
-| `sim_render` | Own the 3D camera and coordinate scene geometry, the dedicated GPU particle renderer, and the screen-space lensing pass. | OpenGL, `sim_core`, `sim_physics` |
+| `sim_physics` | Store black-hole, grid, planet, light-particle, and atom models; calculate screened atomic orbitals and charge. | GLM, C++ standard library |
+| `sim_render` | Own the camera and coordinate scene geometry, GPU light particles, atomic probability samples, and screen-space lensing. | OpenGL, `sim_core`, `sim_physics` |
 | `sim_ui` | Draw and handle sliders, toggles, buttons, and the particle-heat legend. | OpenGL, `sim_core` |
 | `opengl-sim` | Initialize GLFW, create models and controls, forward input, and run the frame loop. | All modules and GLFW |
 
 ## Runtime flow
 
-`src/main.cpp` loads the settings, configures the logger, and starts `app::Application`. The application creates a GLFW window and OpenGL context, initializes the renderer and UI, and binds UI controls to model properties. Every frame it processes input, advances the particle emitter clock, draws the 3D scene and GPU-generated particles, draws the UI, and presents the frame.
+`src/main.cpp` loads the settings, configures the logger, and starts `app::Application`. The application creates a GLFW window and OpenGL context, then asks the user to select celestial or atomic mode. It binds the selected mode's controls to model properties and draws that mode each frame.
 
-`render::Renderer` owns scene geometry and the off-screen scene/lensing targets. `render::ParticleRenderer` owns the independent particle shader and vertex array, so particle controls and orbit rendering do not expand the general scene shader. The UI knows about generic numeric values, toggles, and actions; it does not depend on physics classes. The application is the composition point where UI controls are connected to specific simulation properties.
+`render::Renderer` owns scene geometry and the off-screen scene/lensing targets. `render::ParticleRenderer` and `render::AtomRenderer` own separate GPU pipelines. The atom module creates orbital configurations and radial probability tables; its renderer uses those tables to sample the electron cloud and color the probability heatmap. The UI knows about generic values, toggles, informational labels, and actions; it does not depend on physics classes.
 
 ## Main interfaces
 
 - `core::Settings` and `loadSettings()` in `include/opengl_sim/core/config.hpp` define startup configuration.
 - `core::Logger` in `include/opengl_sim/core/logger.hpp` provides trace through critical log levels.
-- `physics::black_hole`, `physics::grid_plane`, `physics::planet`, and `physics::light_particle_field` in `include/opengl_sim/physics/` hold the scene models.
-- `render::Camera`, `render::Renderer`, and `render::ParticleRenderer` in `include/opengl_sim/render/` control viewing, scene drawing, and particle drawing.
+- `physics::black_hole`, `physics::grid_plane`, `physics::planet`, `physics::light_particle_field`, and `physics::atom` in `include/opengl_sim/physics/` hold the simulation models.
+- `render::Camera`, `render::Renderer`, `render::ParticleRenderer`, and `render::AtomRenderer` in `include/opengl_sim/render/` control viewing and scene drawing.
 - `ui::UserInterface` in `include/opengl_sim/ui/user_interface.hpp` exposes slider, toggle, button, and heatmap-legend registration.
 
 ## Adding a module

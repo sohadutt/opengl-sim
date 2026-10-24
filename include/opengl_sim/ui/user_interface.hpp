@@ -29,8 +29,15 @@ public:
             std::is_integral_v<Value>);
     }
 
+    void addSlider(std::string label, std::function<double()> get_value,
+                   std::function<void(double)> set_value, double minimum,
+                   double maximum);
+
     void addButton(std::string label, std::function<void()> action);
     void addToggle(std::string label, bool& value);
+    void addInfo(std::function<std::string()> text);
+    void clearControls();
+    void setPanelTitle(std::string title);
     void setHeatmapLegend(std::string label);
     [[nodiscard]] bool initialize();
     void setPointerPosition(double x, double y) noexcept;
@@ -58,6 +65,10 @@ private:
         bool* value = nullptr;
     };
 
+    struct InfoLabel {
+        std::function<std::string()> text;
+    };
+
     void addSliderControl(std::string label, std::function<double()> get_value,
                           std::function<void(double)> set_value, double minimum,
                           double maximum, bool integral);
@@ -68,6 +79,8 @@ private:
     std::vector<Slider> sliders_;
     std::vector<Button> buttons_;
     std::vector<Toggle> toggles_;
+    std::vector<InfoLabel> info_labels_;
+    std::string panel_title_ = "SIMULATION";
     std::string heatmap_legend_;
     double pointer_x_ = 0.0;
     double pointer_y_ = 0.0;

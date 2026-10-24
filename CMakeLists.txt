@@ -33,6 +33,7 @@ configure_simulator_target(sim_core)
 
 # Physics data and calculations depend only on GLM.
 add_library(sim_physics STATIC
+    src/physics/atom.cpp
     src/physics/grid_plane.cpp
     src/physics/light_particle_field.cpp
     src/physics/planet.cpp
@@ -42,6 +43,7 @@ target_link_libraries(sim_physics PUBLIC "${GLM_TARGET}")
 
 # Rendering owns the camera and OpenGL drawing code.
 add_library(sim_render STATIC
+    src/render/atom_renderer.cpp
     src/render/camera.cpp
     src/render/particle_renderer.cpp
     src/render/renderer.cpp

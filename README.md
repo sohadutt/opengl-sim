@@ -1,18 +1,21 @@
 # opengl-sim
 
-`opengl-sim` is a modular C++23 GLFW/OpenGL application for visual experiments with gravity and light. The current scene is fully 3D: a dark black-hole shadow, a gravity-warped grid, a colored planet shown through an approximate point-mass lens equation, and a thin glowing disk of orbiting light particles. Atomic and general simulation modules are planned placeholders.
+`opengl-sim` is a modular C++23 GLFW/OpenGL application for visual experiments with gravity, light, and atomic structure. At startup, choose a 3D celestial scene with a black hole or an atomic scene with a hydrogenic electron probability cloud.
 
 ## Current features
 
 - Adjustable black-hole mass, spin, and event-horizon radius.
 - A near-black 3D shadow with a silhouette scaled to approximate the larger photon capture shadow.
-- A smoothly shaded, solid-color planet that forms primary and fainter mirrored images around the black hole when behind it.
+- Place up to 32 planets, adjust the selected planet's mass and size, and watch their mutual Newtonian gravity and black-hole recoil. Planets crossing the event horizon are devoured and add their mass to the black hole.
+- Smoothly shaded, solid-color planets form primary and fainter mirrored images around the black hole when behind it.
 - A gravity-warped grid with controls for visibility, spacing, extent, thickness, and opacity.
 - Up to one million GPU-generated light particles orbit in a thin, glowing disk. Particle size is adjustable, with an optional fading trail.
 - Particle color shifts from deep red through orange and gold to white near the inner edge; the legend is shown in the scene window.
+- Atomic mode starts with hydrogen and displays Monte Carlo samples from its electron probability distribution, a heatmap, and a schematic proton/neutron nucleus.
+- Atomic controls change electron, proton, and neutron counts and display the resulting net ionic charge. Particle charges use CODATA values; neutron count affects the reduced nuclear mass.
 - A modular UI, camera controls, settings file, and level-filtered logging.
 
-The visual model is qualitative. A depth-tested screen-space pass bends camera rays through a point-mass lens equation, so the planet and light disk appear through the black hole together. It does not integrate full general-relativistic paths. Heat colors do not represent calibrated temperatures, and particle orbits are approximate. `physics::G` and `physics::c` are defined in `include/opengl_sim/physics/constants.hpp`, but the current visualization uses scaled simulation units.
+The celestial visual model is qualitative. A depth-tested screen-space pass bends camera rays through a point-mass lens equation; it does not integrate full general-relativistic paths. Atomic mode solves the nonrelativistic one-electron Coulomb model with a finite-nucleus reduced-mass correction. For multiple electrons it uses screened hydrogen-like orbitals with a spherical average and Aufbau filling; it is not a self-consistent Hartree-Fock or correlated many-body calculation, so transition-metal configurations and detailed chemical reactions are outside its scope. Cloud dots sample probability and are not classical electron trajectories. The nucleus is enlarged for visibility and is not to scale. Heat colors show relative probability density, not temperature. See [simulation notes](docs/simulation.md) for model details and limits.
 
 ## Requirements
 
@@ -122,7 +125,7 @@ scripts\manage.bat run --auto --single
 
 ## Controls
 
-The left panel contains sliders for grid settings, particle count and speed, and black-hole mass, spin, and event-horizon radius. Use the **GRID** toggle to show or hide the grid, and **RESET BLACK HOLE** to restore the black-hole defaults. Drag sliders with the left mouse button.
+Choose **CELESTIAL MODE** or **ATOMIC MODE** in the startup panel. The celestial panel contains sliders for grid settings, particle count and speed, and black-hole mass, spin, and event-horizon radius. The atomic panel controls electron, proton, and neutron counts and displays particle charges and net ionic charge. Drag sliders with the left mouse button.
 
 - Drag the scene with the left mouse button to look around.
 - Drag with the right mouse button to look around while over the controls.
@@ -145,8 +148,8 @@ docs/                         Architecture, simulation, and development guides
 include/opengl_sim/
   app/                         Application interface
   core/                        Settings, logging, and shared utilities
-  physics/                     Black hole, grid, planet, particle field, and future models
-  render/                      OpenGL renderer and camera interfaces
+  physics/                     Black hole, grid, planet, light-particle, and atom models
+  render/                      OpenGL scene, particle, atom renderers, and camera
   ui/                          Reusable on-screen controls
 src/                           Implementations, grouped by module
 assets/shaders/                Shader assets
