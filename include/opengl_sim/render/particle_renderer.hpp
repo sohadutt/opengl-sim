@@ -23,7 +23,8 @@ public:
               const physics::black_hole& black_hole,
               float scene_extent,
               const glm::mat4& view_projection,
-              const glm::vec3& camera_position) const noexcept;
+              const glm::vec3& camera_position,
+              bool depth_only = false) const noexcept;
     void release() noexcept;
 
 private:

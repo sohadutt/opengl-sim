@@ -35,15 +35,15 @@ float hash_id(float value) {
 }
 
 vec3 heat_color(float value) {
-    vec3 dark_red = vec3(0.38, 0.025, 0.008);
-    vec3 orange = vec3(1.0, 0.19, 0.025);
-    vec3 amber = vec3(1.0, 0.42, 0.08);
-    vec3 gold = vec3(1.0, 0.67, 0.20);
-    vec3 hot_white = vec3(1.0, 0.94, 0.78);
-    if (value < 0.25) return mix(dark_red, orange, value * 4.0);
-    if (value < 0.5) return mix(orange, amber, (value - 0.25) * 4.0);
-    if (value < 0.75) return mix(amber, gold, (value - 0.5) * 4.0);
-    return mix(gold, hot_white, (value - 0.75) * 4.0);
+    vec3 cool_blue = vec3(0.06, 0.20, 0.72);
+    vec3 cyan = vec3(0.04, 0.68, 0.92);
+    vec3 yellow = vec3(0.92, 0.88, 0.18);
+    vec3 orange = vec3(1.0, 0.48, 0.08);
+    vec3 hot_red = vec3(0.92, 0.035, 0.025);
+    if (value < 0.25) return mix(cool_blue, cyan, value * 4.0);
+    if (value < 0.5) return mix(cyan, yellow, (value - 0.25) * 4.0);
+    if (value < 0.75) return mix(yellow, orange, (value - 0.5) * 4.0);
+    return mix(orange, hot_red, (value - 0.75) * 4.0);
 }
 
 void main() {
@@ -60,7 +60,9 @@ void main() {
     // Bias a little more material toward the hot inner disk while retaining a
     // broad outer distribution. All samples for one particle share this orbit.
     float radius_fraction = pow(radial_random, 1.35);
-    float radius = particle_horizon * 1.5 + radius_fraction * particle_extent;
+    // A nonrotating disk begins near the Schwarzschild ISCO (3 r_s), rather
+    // than placing emitting matter inside the photon capture region.
+    float radius = particle_horizon * 3.0 + radius_fraction * particle_extent;
     float height = (height_random - 0.5) * min(radius * 0.045, particle_horizon * 0.28);
     float ring_radius = sqrt(max(radius * radius - height * height, 0.0));
     float radius_ratio = max(radius / max(particle_horizon, 0.001), 1.0);
@@ -72,14 +74,15 @@ void main() {
     float inclination = height / max(radius, 0.001);
     angular_speed *= 1.0 + clamp(particle_spin, -1.0, 1.0) * inclination * 0.22;
     float orbital_phase = azimuth_random * 6.283185307;
-    float sample_time = particle_time - trail_progress * 0.72;
+    float trail_duration = min(0.72, 0.35 / max(angular_speed, 0.01));
+    float sample_time = particle_time - trail_progress * trail_duration;
     float precession = particle_spin * sample_time * 0.025 / radius_ratio;
     float angle = orbital_phase + sample_time * angular_speed + precession;
 
     vec3 offset = vec3(cos(angle) * ring_radius, height, sin(angle) * ring_radius);
     vec3 particle_position = black_hole_position + offset;
     float heat_radius = particle_horizon * (1.0 + clamp(particle_mass, 0.0, 10.0) * 0.1);
-    float heat = exp(-max(radius - particle_horizon * 1.5, 0.0) /
+    float heat = exp(-max(radius - particle_horizon * 3.0, 0.0) /
                      max(2.5 * heat_radius, 0.001));
 
     // Mild relativistic beaming makes the approaching side brighter without
@@ -89,9 +92,10 @@ void main() {
     float beaming = clamp(1.0 + 0.32 * view_alignment * angular_speed, 0.65, 1.45);
 
     gl_Position = view_projection * vec4(particle_position, 1.0);
-    gl_PointSize = particle_size * (0.78 + heat * 0.72);
+    gl_PointSize = particle_size * (0.62 + heat * 0.38) *
+                   mix(1.0, 0.62, trail_progress);
     particle_color = heat_color(heat) * beaming;
-    particle_alpha = exp(-trail_progress * 2.0);
+    particle_alpha = exp(-trail_progress * 3.5);
 }
 )glsl";
 
@@ -103,8 +107,10 @@ out vec4 output_color;
 void main() {
     float radius = length(gl_PointCoord - vec2(0.5)) * 2.0;
     if (radius > 1.0) discard;
-    float soft_glow = exp(-radius * radius * 3.0);
-    output_color = vec4(particle_color, soft_glow * 0.30 * particle_alpha);
+    float circular_core = 1.0 - smoothstep(0.58, 0.96, radius);
+    float soft_halo = exp(-radius * radius * 8.0) * 0.16;
+    float opacity = (0.68 * circular_core + soft_halo) * particle_alpha;
+    output_color = vec4(particle_color, opacity);
 }
 )glsl";
 
@@ -182,7 +188,8 @@ void ParticleRenderer::draw(const physics::light_particle_field& particles,
                             const physics::black_hole& black_hole,
                             float scene_extent,
                             const glm::mat4& view_projection,
-                            const glm::vec3& camera_position) const noexcept {
+                            const glm::vec3& camera_position,
+                            bool depth_only) const noexcept {
     if (!initialized_) return;
     const auto particle_count = std::clamp(particles.count, 1, 1'000'000);
     const auto trail_samples = particles.trails_enabled ? 4 : 1;
@@ -202,10 +209,19 @@ void ParticleRenderer::draw(const physics::light_particle_field& particles,
     glUniform3fv(black_hole_position_uniform_, 1, &black_hole_position.x);
     glUniform3fv(camera_position_uniform_, 1, &camera_position.x);
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glDepthMask(GL_FALSE);
+    if (depth_only) {
+        // Keep particle depth for the later lens pass without changing the
+        // already blended particle color in the scene target.
+        glDisable(GL_BLEND);
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+        glDepthMask(GL_TRUE);
+    } else {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+    }
     glDrawArrays(GL_POINTS, 0, particle_count * trail_samples);
+    if (depth_only) glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glBindVertexArray(0);

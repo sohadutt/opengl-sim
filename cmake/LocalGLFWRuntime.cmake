@@ -25,7 +25,7 @@ function(configure_local_glfw_runtime target)
     get_filename_component(GLFW_DYLIB_FILENAME "${GLFW_LIBRARY}" NAME)
 
     set_property(TARGET "${target}" PROPERTY BUILD_RPATH
-        "@loader_path/../third_party/glfw/lib;@loader_path/third_party/glfw/lib")
+        "@loader_path/../third_party/glfw;@loader_path/third_party/glfw;@loader_path/../third_party/glfw/lib;@loader_path/third_party/glfw/lib")
     add_custom_command(TARGET "${target}" POST_BUILD
         COMMAND "${INSTALL_NAME_TOOL_EXECUTABLE}" -change
             "${GLFW_DYLIB_ID}" "@rpath/${GLFW_DYLIB_FILENAME}"

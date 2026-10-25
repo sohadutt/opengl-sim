@@ -6,11 +6,19 @@ At startup, choose **Celestial Mode** or **Atomic Mode**.
 
 Atomic mode begins with neutral hydrogen: one proton, no neutrons, and one electron. It computes the nonrelativistic hydrogenic 1s radial probability using the Coulomb potential and the electron-nucleus reduced mass. The proton, neutron, and electron charges use SI elementary-charge values; the displayed ionic charge is `(protons - electrons) × e`. Neutrons are electrically neutral, but their mass changes the reduced-mass correction.
 
-The electron dots are Monte Carlo samples of orbital probability. They show where position measurements are more likely; they are not classical electrons moving on fixed paths. The heatmap displays spherically averaged electron probability density, normalized within the current atom. A spherical average is used for subshells so partially occupied p and d orbitals do not show a particular magnetic-orbital orientation. The nucleus is enlarged for visibility and is not to scale.
+The electron dots are Monte Carlo samples of orbital probability. They show where position measurements are more likely; they are not classical electrons moving on fixed paths. The heatmap displays spherically averaged electron probability density, normalized within the current atom, using blue for lower density and red for higher density. A spherical average is used for subshells so partially occupied p and d orbitals do not show a particular magnetic-orbital orientation. Electron sample size is adjustable in the atomic panel; it is a display control and does not change the quantum model. The nucleus is enlarged for visibility and is not to scale.
 
 For more than one electron, the simulator fills subshells in Madelung/Aufbau order and estimates screening with Slater-style effective nuclear charges. It adds hydrogen-like radial densities for occupied subshells. This independent-electron approximation does not solve a self-consistent Hartree-Fock equation or a correlated many-electron wavefunction. Transition-metal shell exceptions, detailed spectra, collisions, ionization dynamics, and nuclear reactions are not modeled. Results for multi-electron atoms are visual estimates; one-electron hydrogenic states use the analytic nonrelativistic solution.
 
 The electron charge, proton charge, particle masses, and Bohr radius use rounded [NIST 2022 CODATA values](https://physics.nist.gov/cuu/Constants/index.html). The elementary charge is exact in SI.
+
+### Photon absorption and the electron wave
+
+The atomic panel can emit a visible, localized photon wave packet. Its energy slider determines frequency and wavelength through `E = h f = h c / λ`. At the default 10.1988 eV, the photon is tuned to hydrogen's 1s-to-2p transition; NIST lists this hydrogen transition at 10.1988 eV ([NIST hydrogen data](https://physics.nist.gov/cgi-bin/Ionization/atom.php?element=H)). The wave is drawn traveling through the nucleus for clarity, but the modeled energy transfer is to the electron through the atom's electric-dipole interaction. The nucleus can recoil slightly; it is not the absorber in this model.
+
+The interaction evolves a one-excitation state with the time-dependent Schrödinger equation in a two-state, rotating-frame model: `i ħ dψ/dt = H(t) ψ`, with the states `|1s, photon present⟩` and `|2p, photon absorbed⟩`. The Hamiltonian uses the photon/transition detuning and a Gaussian pulse coupling. This is the electric-dipole and rotating-wave approximation used for near-resonant two-level interactions; see the [University of Chicago treatment](https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Time-Dependent_Quantum_Mechanics_and_Spectroscopy_2025e_%28Tokmakoff%29/03%3A_Solving_the_Time-Dependent_Schrodinger_Equation/3.04%3A_Resonant_Driving_of_a_Two-Level_System).
+
+The photon wave's brightness tracks the remaining-photon probability, while the electron cloud blends the ground 1s probability with the excited 2p probability. Near resonance, the photon can be mostly absorbed and the electron cloud becomes directional; far off resonance, the packet mostly passes through. The displayed atom energy is the expected excitation energy, `P(2p) × ΔE`. This is a coherent single-photon, two-state educational model, not a full quantized electromagnetic-field calculation. It omits spontaneous emission, ionization, fine structure, and multi-electron dynamics. The on-screen wavelength and propagation speed are visualized at a convenient scale and are not to scale.
 
 ## Celestial mode
 
@@ -18,11 +26,11 @@ Celestial coordinates are scaled and dimensionless; this is an interactive visua
 
 ### Three-dimensional black hole
 
-`physics::black_hole` stores a 3D center, mass, event-horizon radius, and spin. The renderer draws a near-black sphere sized to approximate the larger shadow seen by a distant observer.
+`physics::black_hole` stores a 3D center, mass, event-horizon radius, and spin. The post-process masks the Schwarzschild capture shadow at 2.598 event-horizon radii, the distant-observer critical impact parameter for a nonrotating hole. Spin affects the disk but does not yet deform the shadow silhouette.
 
 ### Planets and gravitational lensing
 
-`physics::planet` stores a 3D position, velocity, scaled mass, radius, color, and rotation. The UI can add up to 32 planets and select each one to edit its mass and size. A softened Newtonian N-body model advances planet-planet gravity and black-hole recoil in bounded substeps. When a planet crosses the event-horizon radius, it is removed and its mass is added to the black hole; the horizon grows in proportion to the mass gain. The planet uses a smooth solid-color surface without a procedural stripe pattern. The scene is drawn to a color and depth target, then the point-mass lens equation is applied per camera pixel: each ray is back-projected to a source-image coordinate and samples the scene there. This naturally produces the primary and secondary images while warping the planets and light disk as the camera sees them. The depth check preserves objects in front of the black hole. The Einstein angle is estimated from black-hole mass, event-horizon scale, and camera/source distances; the shadow mask covers captured rays.
+`physics::planet` stores a 3D position, velocity, scaled mass, radius, color, and rotation. The UI can add up to 32 planets and select each one to edit its mass and size. A softened Newtonian N-body model advances planet-planet gravity and black-hole recoil in bounded substeps. When a planet crosses the event-horizon radius, it is removed and its mass is added to the black hole; the horizon grows in proportion to the mass gain. The planet uses a smooth solid-color surface without a procedural stripe pattern. The scene is drawn to a color and depth target, then the point-mass lens equation is applied per camera pixel: each ray is back-projected to a source-image coordinate and samples the scene there. The accretion disk's far-side depth contributes to lens strength even when no planets are present. The depth check preserves objects in front of the black hole. This screen-space weak-field lens is still an approximation; it does not trace Schwarzschild or Kerr null geodesics.
 
 The celestial model uses scene-scaled masses and a tuned gravitational constant (`physics::scaled_celestial_G = 0.32`) rather than SI units. It is intended for interactive orbital behavior, not precision astrophysical predictions.
 
@@ -36,7 +44,7 @@ This is a depth-tested screen-space approximation, not full general-relativistic
 
 ### Celestial heatmap
 
-The shader maps a proximity-based heat score from deep red through orange and gold to near-white at the inner edge. These colors do not represent physical temperature or radiation.
+The shader maps a proximity-based heat score from blue at the cool outer region through cyan and yellow to red at the hot inner edge. These colors do not represent physical temperature or radiation.
 
 ## Physical constants
 

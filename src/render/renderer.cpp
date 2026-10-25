@@ -389,6 +389,7 @@ void Renderer::draw(const physics::black_hole& black_hole,
                                       ? lens_center_clip.w : 0.0001F);
     const auto camera_position = camera.position();
     const auto lens_distance = glm::length(camera_position - lens_center_world);
+    const auto horizon = static_cast<float>(std::max(black_hole.event_horizon, 0.01));
     float source_distance = lens_distance;
     for (const auto& planet : planets) {
         const auto distance = glm::length(camera_position - glm::vec3{
@@ -396,9 +397,21 @@ void Renderer::draw(const physics::black_hole& black_hole,
             static_cast<float>(planet.position.z)});
         if (distance > lens_distance + 0.01F) source_distance = std::max(source_distance, distance);
     }
+    if (particles.count > 0) {
+        // The accretion disk is centered on the lens, so its center is not a
+        // useful source distance. Use the disk's projected half-depth along
+        // the camera ray to include its far-side particles behind the lens.
+        const auto camera_offset = camera_position - lens_center_world;
+        const auto view_from_lens = camera_offset /
+            std::max(glm::length(camera_offset), 0.01F);
+        const auto disk_line_of_sight = std::sqrt(view_from_lens.x * view_from_lens.x +
+                                                  view_from_lens.z * view_from_lens.z);
+        const auto disk_radius = horizon * 3.0F + std::max(static_cast<float>(grid_plane.size), 1.0F);
+        source_distance = std::max(source_distance,
+                                   lens_distance + disk_radius * disk_line_of_sight);
+    }
     const auto source_behind_lens = source_distance > lens_distance + 0.01F &&
                                     lens_center_clip.w > 0.0F;
-    const auto horizon = static_cast<float>(std::max(black_hole.event_horizon, 0.01));
     const auto lens_to_source = std::max(source_distance - lens_distance, 0.0F);
     const auto einstein_angle = source_behind_lens
         ? std::sqrt(2.0F * horizon * std::max(static_cast<float>(black_hole.mass), 0.0F) *
@@ -461,7 +474,7 @@ void Renderer::draw(const physics::black_hole& black_hole,
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         upload_and_draw(grid, GL_LINES,
-                        {0.10F, 0.23F, 0.34F,
+                        {1.0F, 0.12F, 0.08F,
                          static_cast<float>(std::clamp(grid_plane.line_opacity, 0.0, 1.0))});
         glDisable(GL_BLEND);
         glLineWidth(1.0F);
@@ -486,13 +499,19 @@ void Renderer::draw(const physics::black_hole& black_hole,
     // on geometry and avoids carrying particle uniforms through every draw.
     particle_renderer_.draw(particles, black_hole, static_cast<float>(grid_plane.size),
                             view_projection, camera_position);
+    particle_renderer_.draw(particles, black_hole, static_cast<float>(grid_plane.size),
+                            view_projection, camera_position, true);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
     glUseProgram(0);
 
+    // For a Schwarzschild hole, the critical impact parameter is
+    // 3*sqrt(3) GM/c^2, or 3*sqrt(3)/2 event-horizon radii.
+    constexpr auto schwarzschild_shadow_to_horizon = 2.598076211F;
     const auto shadow_radius = lens_center_clip.w > 0.0F
-        ? horizon * 1.30F / std::max(lens_distance, 0.01F) * projection[1][1]
+        ? horizon * schwarzschild_shadow_to_horizon /
+              std::max(lens_distance, 0.01F) * projection[1][1]
         : 0.0F;
     const auto lens_depth = lens_center_clip.w > 0.0F
         ? lens_center_clip.z / lens_center_clip.w * 0.5F + 0.5F : 1.0F;

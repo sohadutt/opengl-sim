@@ -13,7 +13,9 @@ find_path(GLFW_INCLUDE_DIR
 )
 find_library(GLFW_LIBRARY
     NAMES glfw glfw3 glfw.3.5
-    PATHS "${PROJECT_SOURCE_DIR}/third_party/glfw/lib"
+    PATHS
+        "${PROJECT_SOURCE_DIR}/third_party/glfw"
+        "${PROJECT_SOURCE_DIR}/third_party/glfw/lib"
     NO_DEFAULT_PATH
 )
 
@@ -47,10 +49,41 @@ else()
     elseif(TARGET glfw3::glfw)
         set(GLFW_TARGET glfw3::glfw)
     else()
-        message(FATAL_ERROR
-            "GLFW was not found. Add a compatible copy under third_party/glfw/ "
-            "or install GLFW 3.3+ and expose its CMake package."
+        # Some GLFW installations (including Homebrew setups without the CMake
+        # config package) expose only headers and a library. Import those
+        # directly so a working Homebrew install does not depend on package
+        # config discovery.
+        set(GLFW_SYSTEM_INCLUDE_HINTS)
+        set(GLFW_SYSTEM_LIBRARY_HINTS)
+        foreach(GLFW_PACKAGE_HINT IN LISTS GLFW_PACKAGE_HINTS)
+            list(APPEND GLFW_SYSTEM_INCLUDE_HINTS "${GLFW_PACKAGE_HINT}/include")
+            list(APPEND GLFW_SYSTEM_LIBRARY_HINTS "${GLFW_PACKAGE_HINT}/lib")
+        endforeach()
+
+        find_path(GLFW_SYSTEM_INCLUDE_DIR
+            NAMES GLFW/glfw3.h
+            HINTS ${GLFW_SYSTEM_INCLUDE_HINTS}
         )
+        find_library(GLFW_SYSTEM_LIBRARY
+            NAMES glfw glfw3
+            HINTS ${GLFW_SYSTEM_LIBRARY_HINTS}
+        )
+
+        if(GLFW_SYSTEM_INCLUDE_DIR AND GLFW_SYSTEM_LIBRARY)
+            add_library(system_glfw UNKNOWN IMPORTED)
+            set_target_properties(system_glfw PROPERTIES
+                IMPORTED_LOCATION "${GLFW_SYSTEM_LIBRARY}"
+                INTERFACE_INCLUDE_DIRECTORIES "${GLFW_SYSTEM_INCLUDE_DIR}"
+            )
+            set(GLFW_TARGET system_glfw)
+        else()
+            message(FATAL_ERROR
+                "GLFW 3.3+ was not found. On macOS, install it with "
+                "'brew install glfw', then rerun ./scripts/manage.sh build. "
+                "On other systems, install the GLFW development package or "
+                "provide a compatible copy under third_party/glfw/."
+            )
+        endif()
     endif()
 endif()
 

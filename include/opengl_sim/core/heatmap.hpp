@@ -8,11 +8,11 @@ namespace opengl_sim::core {
 
 [[nodiscard]] inline std::array<float, 3> heatColor(float value) noexcept {
     constexpr std::array<std::array<float, 3>, 5> colors{{
-        {0.38F, 0.025F, 0.008F},
-        {1.0F, 0.19F, 0.025F},
-        {1.0F, 0.42F, 0.08F},
-        {1.0F, 0.67F, 0.20F},
-        {1.0F, 0.94F, 0.78F},
+        {0.06F, 0.20F, 0.72F},
+        {0.04F, 0.68F, 0.92F},
+        {0.92F, 0.88F, 0.18F},
+        {1.0F, 0.48F, 0.08F},
+        {0.92F, 0.035F, 0.025F},
     }};
     const auto scaled = std::clamp(value, 0.0F, 1.0F) * 4.0F;
     const auto index = std::min(static_cast<std::size_t>(scaled), colors.size() - 2);
