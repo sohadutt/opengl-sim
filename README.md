@@ -10,12 +10,14 @@
 - Smoothly shaded, solid-color planets form primary and fainter mirrored images around the black hole when behind it.
 - A gravity-warped grid with controls for visibility, spacing, extent, thickness, and opacity.
 - Up to one million GPU-generated light particles orbit in a thin, glowing disk. Particle size is adjustable, with an optional fading trail.
-- Particle color shifts from deep red through orange and gold to white near the inner edge; the legend is shown in the scene window.
+- Particle heatmap uses blue for cooler outer regions and red for hotter inner regions; the legend is shown in the scene window.
 - Atomic mode starts with hydrogen and displays Monte Carlo samples from its electron probability distribution, a heatmap, and a schematic proton/neutron nucleus.
+- Emit a photon wave packet in atomic mode. Its energy determines frequency and wavelength; a near-resonant 1s-to-2p interaction transfers excitation probability from the photon to the electron wave using a time-dependent Schrödinger model. The probability cloud changes shape and highlights excited-state samples as it absorbs the photon.
+- Atomic and celestial heatmaps share a blue-cool to red-hot palette. Atomic mode includes an electron-sample size slider.
 - Atomic controls change electron, proton, and neutron counts and display the resulting net ionic charge. Particle charges use CODATA values; neutron count affects the reduced nuclear mass.
 - A modular UI, camera controls, settings file, and level-filtered logging.
 
-The celestial visual model is qualitative. A depth-tested screen-space pass bends camera rays through a point-mass lens equation; it does not integrate full general-relativistic paths. Atomic mode solves the nonrelativistic one-electron Coulomb model with a finite-nucleus reduced-mass correction. For multiple electrons it uses screened hydrogen-like orbitals with a spherical average and Aufbau filling; it is not a self-consistent Hartree-Fock or correlated many-body calculation, so transition-metal configurations and detailed chemical reactions are outside its scope. Cloud dots sample probability and are not classical electron trajectories. The nucleus is enlarged for visibility and is not to scale. Heat colors show relative probability density, not temperature. See [simulation notes](docs/simulation.md) for model details and limits.
+The celestial visual model is qualitative. A depth-tested screen-space pass bends camera rays through a point-mass lens equation; it does not integrate full general-relativistic paths. Atomic mode solves the nonrelativistic one-electron Coulomb model with a finite-nucleus reduced-mass correction. For multiple electrons it uses screened hydrogen-like orbitals with a spherical average and Aufbau filling; it is not a self-consistent Hartree-Fock or correlated many-body calculation. Photon interaction is a two-state 1s/2p approximation in the dipole and rotating-wave limits; it does not model spontaneous emission, ionization, fine structure, or correlated multi-electron response. Cloud dots sample probability and are not classical electron trajectories. The nucleus is enlarged for visibility and is not to scale. Heat colors show relative probability density, not temperature. See [simulation notes](docs/simulation.md) for model details and limits.
 
 ## Requirements
 
@@ -68,7 +70,7 @@ cmake --build build --parallel
 
 Run `ctest --test-dir build --output-on-failure` to run the test suite. Launch the program from the project root so `logs/simulator.log` is created in the expected location. The UCRT64 terminal supplies the runtime DLL search path for the MSYS2 libraries. The Windows management script also uses GCC and Ninja; its `--auto` option can install MSYS2 and the required UCRT64 packages.
 
-The CMake dependency setup first checks for a compatible project-local GLFW copy under `third_party/glfw/`, then checks for a system GLFW package. On macOS it also checks Homebrew's package prefix. The checked-in `third_party/glfw/lib/libglfw.3.5.dylib` is a macOS arm64 runtime library; other systems need their own compatible GLFW installation.
+The CMake dependency setup first checks for a compatible project-local GLFW copy under `third_party/glfw/`, then checks for a system GLFW package. On macOS it also checks Homebrew's package prefix. The checked-in `third_party/glfw/libglfw.3.5.dylib` is a macOS arm64 runtime library; other systems need their own compatible GLFW installation.
 
 ## Build and run
 
@@ -125,7 +127,7 @@ scripts\manage.bat run --auto --single
 
 ## Controls
 
-Choose **CELESTIAL MODE** or **ATOMIC MODE** in the startup panel. The celestial panel contains sliders for grid settings, particle count and speed, and black-hole mass, spin, and event-horizon radius. The atomic panel controls electron, proton, and neutron counts and displays particle charges and net ionic charge. Drag sliders with the left mouse button.
+Choose **CELESTIAL MODE** or **ATOMIC MODE** in the startup panel. The celestial panel contains sliders for grid settings, particle count and speed, and black-hole mass, spin, and event-horizon radius. The atomic panel controls electron count and display size, proton and neutron counts, photon energy, and dipole-field coupling. **EMIT PHOTON** starts a packet; the panel reports frequency, wavelength, transition gap, remaining-photon probability, and expected electron excitation energy. Drag sliders with the left mouse button.
 
 - Drag the scene with the left mouse button to look around.
 - Drag with the right mouse button to look around while over the controls.

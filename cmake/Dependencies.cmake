@@ -13,7 +13,9 @@ find_path(GLFW_INCLUDE_DIR
 )
 find_library(GLFW_LIBRARY
     NAMES glfw glfw3 glfw.3.5
-    PATHS "${PROJECT_SOURCE_DIR}/third_party/glfw/lib"
+    PATHS
+        "${PROJECT_SOURCE_DIR}/third_party/glfw"
+        "${PROJECT_SOURCE_DIR}/third_party/glfw/lib"
     NO_DEFAULT_PATH
 )
 

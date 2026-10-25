@@ -9,7 +9,9 @@
 #include "opengl_sim/ui/user_interface.hpp"
 
 #include <GLFW/glfw3.h>
+#include <iomanip>
 #include <random>
+#include <sstream>
 
 
 
@@ -24,6 +26,12 @@ glm::vec3 randomPlanetColor() {
   static std::mt19937 random_engine{std::random_device{}()};
   static std::uniform_real_distribution<float> channel{0.15F, 0.95F};
   return {channel(random_engine), channel(random_engine), channel(random_engine)};
+}
+
+std::string formatDecimal(double value, int precision) {
+  std::ostringstream output;
+  output << std::fixed << std::setprecision(precision) << value;
+  return output.str();
 }
 
 void glfwErrorCallback(int error, const char *description) {
@@ -234,11 +242,20 @@ int Application::run() {
         } else {
           interface.setPanelTitle("ATOMIC MODE");
           interface.addSlider("ELECTRONS", atom_model.electron_count, 0, 118);
+          interface.addSlider("ELECTRON SIZE", atom_model.electron_size, 1.0, 12.0);
           interface.addSlider("PROTONS", atom_model.proton_count, 1, 118);
           interface.addSlider("NEUTRONS", atom_model.neutron_count, 0, 300);
-          interface.addInfo([] { return "ELECTRON -1.60218E-19C"; });
-          interface.addInfo([] { return "PROTON +1.60218E-19C"; });
-          interface.addInfo([] { return "NEUTRON 0C"; });
+          interface.addSlider("PHOTON ENERGY EV", [&atom_model] {
+            return atom_model.photon_energy_ev;
+          }, [&atom_model](double value) {
+            atom_model.setPhotonEnergyEv(value);
+          }, 1.0, 20.0);
+          interface.addSlider("FIELD COUPLING EV", [&atom_model] {
+            return atom_model.photon_coupling_ev;
+          }, [&atom_model](double value) {
+            atom_model.setPhotonCouplingEv(value);
+          }, 0.0, 2.5);
+          interface.addInfo([] { return "N=0C E-/P+=1.602E-19C"; });
           interface.addInfo([&atom_model] {
             const auto charge = atom_model.net_charge_number();
             return std::string{"NET CHARGE "} + (charge >= 0 ? "+" : "") +
@@ -251,9 +268,33 @@ int Application::run() {
             }
             return std::string{"SCREENED GROUND STATE"};
           });
-          interface.addInfo([] { return "CLOUD IS A PROBABILITY"; });
-          interface.addInfo([] { return "NUCLEUS IS NOT TO SCALE"; });
+          interface.addInfo([&atom_model] {
+            return std::string{"L"} + formatDecimal(atom_model.photon_wavelength_nm(), 1) +
+                   "NM  F" + formatDecimal(atom_model.photon_frequency_hz() / 1e12, 0) + "THZ";
+          });
+          interface.addInfo([&atom_model] {
+            return std::string{"1S-2P GAP "} + formatDecimal(atom_model.transition_energy_ev(), 2) + "EV";
+          });
+          interface.addInfo([&atom_model] {
+            return std::string{"EXCITED "} +
+                   formatDecimal(atom_model.excitation_probability() * 100.0, 1) +
+                   "%  E " + formatDecimal(atom_model.atomic_energy_ev(), 2) + "EV";
+          });
+          interface.addInfo([&atom_model] {
+            if (!atom_model.photon_active && atom_model.photon_time_fs == 0.0) {
+              return std::string{"PHOTON READY"};
+            }
+            if (atom_model.photon_active) return std::string{"PHOTON WAVE IN FLIGHT"};
+            return atom_model.photon_survival_probability() < 0.5
+                       ? std::string{"PHOTON MOSTLY ABSORBED"}
+                       : std::string{"PHOTON MOSTLY TRANSMITTED"};
+          });
+          interface.addInfo([] { return "CLOUD RESPONDS TO PHOTON"; });
+          interface.addInfo([] { return "TWO-LEVEL TDSE; VISUAL SCALE"; });
           interface.setHeatmapLegend("ELECTRON PROBABILITY");
+          interface.addButton("EMIT PHOTON", [&atom_model] {
+            atom_model.emitPhoton();
+          });
           interface.addButton("BACK TO MODE SELECT", [&requested_mode] {
             requested_mode = SimulationMode::selection;
           });
@@ -303,6 +344,8 @@ int Application::run() {
           physics::advanceCelestialSystem(black_hole, planets, delta_seconds);
           if (planets.empty()) selected_planet = 0;
           else if (selected_planet >= planets.size()) selected_planet = planets.size() - 1;
+        } else if (current_mode == SimulationMode::atomic) {
+          atom_model.updatePhoton(delta_seconds);
         }
 
         int framebuffer_width = 0;

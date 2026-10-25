@@ -10,6 +10,9 @@
 namespace opengl_sim::physics {
 namespace {
 
+constexpr auto visual_speed_bohr_per_fs = 4.0;
+constexpr auto photon_initial_x_bohr = -5.0;
+
 struct subshell {
     int principal;
     int angular;
@@ -170,6 +173,113 @@ double atom::orbital_radial_probability(const atomic_orbital& orbital,
     const auto reduced_radius = reduced_bohr_radius_m() / bohr_radius_m;
     return radius_bohr * radius_bohr *
            radialWavefunctionSquared(orbital, radius_bohr, reduced_radius);
+}
+
+void atom::setPhotonEnergyEv(double energy_ev) noexcept {
+    if (std::isfinite(energy_ev)) photon_energy_ev = std::clamp(energy_ev, 0.1, 100.0);
+}
+
+void atom::setPhotonCouplingEv(double coupling_ev) noexcept {
+    if (std::isfinite(coupling_ev)) photon_coupling_ev = std::clamp(coupling_ev, 0.0, 4.0);
+}
+
+void atom::emitPhoton() noexcept {
+    photon_time_fs = 0.0;
+    photon_amplitude = {1.0, 0.0};
+    excited_amplitude = {0.0, 0.0};
+    photon_active = true;
+}
+
+void atom::updatePhoton(double delta_seconds) noexcept {
+    if (!photon_active || !std::isfinite(delta_seconds) || delta_seconds <= 0.0) {
+        return;
+    }
+
+    // The visual clock runs at 3 fs per wall-clock second. Short exact
+    // propagator steps keep the time-dependent pulse envelope well resolved.
+    const auto elapsed_fs = std::min(delta_seconds, 0.1) * 3.0;
+    constexpr auto maximum_step_fs = 0.02;
+    const auto steps = std::max(1, static_cast<int>(std::ceil(elapsed_fs / maximum_step_fs)));
+    const auto step_fs = elapsed_fs / static_cast<double>(steps);
+    const auto detuning_ev = photon_energy_ev - transition_energy_ev();
+    constexpr auto pulse_width_bohr = 1.6;
+
+    for (int step = 0; step < steps; ++step) {
+        const auto center_x = photon_center_x();
+        const auto envelope = std::exp(-0.5 * center_x * center_x /
+                                       (pulse_width_bohr * pulse_width_bohr));
+        const auto coupling_ev = electron_count > 0 && proton_count > 0
+                                     ? photon_coupling_ev * envelope : 0.0;
+
+        // Exact exponential for a constant two-state Hamiltonian over this
+        // short interval: H = [[0, g], [g, detuning]]. This is the rotating-
+        // frame, rotating-wave approximation to i*hbar*d|psi>/dt = H|psi>.
+        const auto half_detuning = 0.5 * detuning_ev;
+        const auto frequency_ev = std::hypot(half_detuning, coupling_ev);
+        const auto angle = frequency_ev * step_fs / hbar_ev_fs;
+        const auto cosine = std::cos(angle);
+        const auto sine_factor = frequency_ev > 1e-14
+                                     ? std::sin(angle) / frequency_ev : step_fs / hbar_ev_fs;
+        const auto ground = photon_amplitude;
+        const auto excited = excited_amplitude;
+        const std::complex<double> imaginary{0.0, 1.0};
+        photon_amplitude = cosine * ground - imaginary * sine_factor *
+            (-half_detuning * ground + coupling_ev * excited);
+        excited_amplitude = cosine * excited - imaginary * sine_factor *
+            (coupling_ev * ground + half_detuning * excited);
+
+        const auto norm = std::sqrt(std::norm(photon_amplitude) +
+                                    std::norm(excited_amplitude));
+        if (norm > 0.0) {
+            photon_amplitude /= norm;
+            excited_amplitude /= norm;
+        }
+        photon_time_fs += step_fs;
+    }
+
+    if (photon_center_x() > 5.0) photon_active = false;
+}
+
+double atom::transition_energy_ev() const {
+    if (proton_count <= 0 || electron_count <= 0) return 0.0;
+    const auto orbitals = ground_state_orbitals();
+    const auto effective_charge = orbitals.empty()
+                                      ? static_cast<double>(proton_count)
+                                      : orbitals.front().effective_nuclear_charge;
+    return hydrogen_1s_2p_transition_ev * effective_charge * effective_charge;
+}
+
+double atom::photon_frequency_hz() const noexcept {
+    return photon_energy_ev * elementary_charge_c / planck_constant_j_s;
+}
+
+double atom::photon_wavelength_nm() const noexcept {
+    const auto frequency = photon_frequency_hz();
+    return frequency > 0.0 ? c / frequency * 1e9 : 0.0;
+}
+
+double atom::excitation_probability() const noexcept {
+    return std::clamp(std::norm(excited_amplitude), 0.0, 1.0);
+}
+
+double atom::photon_survival_probability() const noexcept {
+    return std::clamp(std::norm(photon_amplitude), 0.0, 1.0);
+}
+
+double atom::atomic_energy_ev() const {
+    return excitation_probability() * transition_energy_ev();
+}
+
+double atom::photon_center_x() const noexcept {
+    return photon_initial_x_bohr + visual_speed_bohr_per_fs * photon_time_fs;
+}
+
+double atom::photon_visual_wave_number() const noexcept {
+    return photon_energy_ev / hbar_ev_fs / visual_speed_bohr_per_fs;
+}
+
+bool atom::photon_visible() const noexcept {
+    return photon_active && photon_survival_probability() > 1e-4;
 }
 
 } // namespace opengl_sim::physics

@@ -6,11 +6,19 @@ At startup, choose **Celestial Mode** or **Atomic Mode**.
 
 Atomic mode begins with neutral hydrogen: one proton, no neutrons, and one electron. It computes the nonrelativistic hydrogenic 1s radial probability using the Coulomb potential and the electron-nucleus reduced mass. The proton, neutron, and electron charges use SI elementary-charge values; the displayed ionic charge is `(protons - electrons) × e`. Neutrons are electrically neutral, but their mass changes the reduced-mass correction.
 
-The electron dots are Monte Carlo samples of orbital probability. They show where position measurements are more likely; they are not classical electrons moving on fixed paths. The heatmap displays spherically averaged electron probability density, normalized within the current atom. A spherical average is used for subshells so partially occupied p and d orbitals do not show a particular magnetic-orbital orientation. The nucleus is enlarged for visibility and is not to scale.
+The electron dots are Monte Carlo samples of orbital probability. They show where position measurements are more likely; they are not classical electrons moving on fixed paths. The heatmap displays spherically averaged electron probability density, normalized within the current atom, using blue for lower density and red for higher density. A spherical average is used for subshells so partially occupied p and d orbitals do not show a particular magnetic-orbital orientation. Electron sample size is adjustable in the atomic panel; it is a display control and does not change the quantum model. The nucleus is enlarged for visibility and is not to scale.
 
 For more than one electron, the simulator fills subshells in Madelung/Aufbau order and estimates screening with Slater-style effective nuclear charges. It adds hydrogen-like radial densities for occupied subshells. This independent-electron approximation does not solve a self-consistent Hartree-Fock equation or a correlated many-electron wavefunction. Transition-metal shell exceptions, detailed spectra, collisions, ionization dynamics, and nuclear reactions are not modeled. Results for multi-electron atoms are visual estimates; one-electron hydrogenic states use the analytic nonrelativistic solution.
 
 The electron charge, proton charge, particle masses, and Bohr radius use rounded [NIST 2022 CODATA values](https://physics.nist.gov/cuu/Constants/index.html). The elementary charge is exact in SI.
+
+### Photon absorption and the electron wave
+
+The atomic panel can emit a visible, localized photon wave packet. Its energy slider determines frequency and wavelength through `E = h f = h c / λ`. At the default 10.1988 eV, the photon is tuned to hydrogen's 1s-to-2p transition; NIST lists this hydrogen transition at 10.1988 eV ([NIST hydrogen data](https://physics.nist.gov/cgi-bin/Ionization/atom.php?element=H)). The wave is drawn traveling through the nucleus for clarity, but the modeled energy transfer is to the electron through the atom's electric-dipole interaction. The nucleus can recoil slightly; it is not the absorber in this model.
+
+The interaction evolves a one-excitation state with the time-dependent Schrödinger equation in a two-state, rotating-frame model: `i ħ dψ/dt = H(t) ψ`, with the states `|1s, photon present⟩` and `|2p, photon absorbed⟩`. The Hamiltonian uses the photon/transition detuning and a Gaussian pulse coupling. This is the electric-dipole and rotating-wave approximation used for near-resonant two-level interactions; see the [University of Chicago treatment](https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Time-Dependent_Quantum_Mechanics_and_Spectroscopy_2025e_%28Tokmakoff%29/03%3A_Solving_the_Time-Dependent_Schrodinger_Equation/3.04%3A_Resonant_Driving_of_a_Two-Level_System).
+
+The photon wave's brightness tracks the remaining-photon probability. The cloud renderer samples population-weighted 1s and 2p probability densities, so near resonance it becomes directional and excited-state samples grow slightly brighter/larger; this makes the evolving excitation easier to see. It does not render phase-dependent spatial interference between the orbitals. Far off resonance, the packet mostly passes through. The displayed atom energy is the expected excitation energy, `P(2p) × ΔE`. This is a coherent single-photon, two-state educational model, not a full quantized electromagnetic-field calculation. It omits spontaneous emission, ionization, fine structure, and multi-electron dynamics. The on-screen wavelength and propagation speed are visualized at a convenient scale and are not to scale.
 
 ## Celestial mode
 
@@ -36,7 +44,7 @@ This is a depth-tested screen-space approximation, not full general-relativistic
 
 ### Celestial heatmap
 
-The shader maps a proximity-based heat score from deep red through orange and gold to near-white at the inner edge. These colors do not represent physical temperature or radiation.
+The shader maps a proximity-based heat score from blue at the cool outer region through cyan and yellow to red at the hot inner edge. These colors do not represent physical temperature or radiation.
 
 ## Physical constants
 
