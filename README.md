@@ -5,7 +5,7 @@
 ## Current features
 
 - Adjustable black-hole mass, spin, and event-horizon radius.
-- A near-black 3D shadow with a silhouette scaled to approximate the larger photon capture shadow.
+- A near-black shadow sized to the Schwarzschild critical capture impact parameter, with the accretion disk's far-side particles included in lens strength.
 - Place up to 32 planets, adjust the selected planet's mass and size, and watch their mutual Newtonian gravity and black-hole recoil. Planets crossing the event horizon are devoured and add their mass to the black hole.
 - Smoothly shaded, solid-color planets form primary and fainter mirrored images around the black hole when behind it.
 - A gravity-warped grid with controls for visibility, spacing, extent, thickness, and opacity.
@@ -17,7 +17,7 @@
 - Atomic controls change electron, proton, and neutron counts and display the resulting net ionic charge. Particle charges use CODATA values; neutron count affects the reduced nuclear mass.
 - A modular UI, camera controls, settings file, and level-filtered logging.
 
-The celestial visual model is qualitative. A depth-tested screen-space pass bends camera rays through a point-mass lens equation; it does not integrate full general-relativistic paths. Atomic mode solves the nonrelativistic one-electron Coulomb model with a finite-nucleus reduced-mass correction. For multiple electrons it uses screened hydrogen-like orbitals with a spherical average and Aufbau filling; it is not a self-consistent Hartree-Fock or correlated many-body calculation. Photon interaction is a two-state 1s/2p approximation in the dipole and rotating-wave limits; it does not model spontaneous emission, ionization, fine structure, or correlated multi-electron response. Cloud dots sample probability and are not classical electron trajectories. The nucleus is enlarged for visibility and is not to scale. Heat colors show relative probability density, not temperature. See [simulation notes](docs/simulation.md) for model details and limits.
+The celestial visual model is qualitative. A depth-tested screen-space pass bends camera rays through a point-mass lens equation; it does not integrate full general-relativistic paths or deform the shadow for spin. Atomic mode solves the nonrelativistic one-electron Coulomb model with a reduced-mass correction. For multiple electrons it uses screened hydrogen-like orbitals with a spherical average and Aufbau filling; it is not a self-consistent Hartree-Fock or correlated many-body calculation. Photon interaction is a two-state 1s/2p approximation in the dipole and rotating-wave limits; it does not model spontaneous emission, ionization, fine structure, or correlated multi-electron response. Cloud dots sample probability and are not classical electron trajectories. The nucleus is enlarged for visibility and is not to scale. Heat colors show relative probability density, not temperature. See [simulation notes](docs/simulation.md) for model details and limits.
 
 ## Requirements
 

@@ -60,7 +60,9 @@ void main() {
     // Bias a little more material toward the hot inner disk while retaining a
     // broad outer distribution. All samples for one particle share this orbit.
     float radius_fraction = pow(radial_random, 1.35);
-    float radius = particle_horizon * 1.5 + radius_fraction * particle_extent;
+    // A nonrotating disk begins near the Schwarzschild ISCO (3 r_s), rather
+    // than placing emitting matter inside the photon capture region.
+    float radius = particle_horizon * 3.0 + radius_fraction * particle_extent;
     float height = (height_random - 0.5) * min(radius * 0.045, particle_horizon * 0.28);
     float ring_radius = sqrt(max(radius * radius - height * height, 0.0));
     float radius_ratio = max(radius / max(particle_horizon, 0.001), 1.0);
@@ -80,7 +82,7 @@ void main() {
     vec3 offset = vec3(cos(angle) * ring_radius, height, sin(angle) * ring_radius);
     vec3 particle_position = black_hole_position + offset;
     float heat_radius = particle_horizon * (1.0 + clamp(particle_mass, 0.0, 10.0) * 0.1);
-    float heat = exp(-max(radius - particle_horizon * 1.5, 0.0) /
+    float heat = exp(-max(radius - particle_horizon * 3.0, 0.0) /
                      max(2.5 * heat_radius, 0.001));
 
     // Mild relativistic beaming makes the approaching side brighter without

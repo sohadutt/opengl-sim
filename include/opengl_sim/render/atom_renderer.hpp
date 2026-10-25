@@ -48,6 +48,7 @@ private:
     int photon_wave_number_uniform_ = -1;
     int photon_amplitude_uniform_ = -1;
     int electron_size_uniform_ = -1;
+    int electron_pattern_uniform_ = -1;
     int last_proton_count_ = -1;
     int last_neutron_count_ = -1;
     int last_electron_count_ = -1;

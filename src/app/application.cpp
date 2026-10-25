@@ -9,6 +9,7 @@
 #include "opengl_sim/ui/user_interface.hpp"
 
 #include <GLFW/glfw3.h>
+#include <array>
 #include <iomanip>
 #include <random>
 #include <sstream>
@@ -158,13 +159,14 @@ int Application::run() {
       physics::black_hole black_hole{{0.0, 0.0, 0.0}, 1.0, 0.24, 0.5};
       physics::light_particle_field particles;
       physics::atom atom_model;
+      int selected_atom_preset = 0;
       std::vector<physics::planet> planets;
       physics::planet first_planet{{0.35, 0.12, -2.2}, 0.52, {0.16F, 0.58F, 0.95F}};
       first_planet.velocity = {0.37, 0.0, 0.06};
       planets.push_back(first_planet);
       std::size_t selected_planet = 0;
       constexpr std::size_t maximum_planets = 32;
-      physics::grid_plane grid{{0.0, 0.0, 0.0}, 1.0, 10.0, 0.01, 0.5};
+      physics::grid_plane grid{{0.0, 0.0, 0.0}, 1.0, 10.0, 0.01, 0.8};
       bool show_grid = true;
       render::Camera camera;
       auto current_mode = SimulationMode::selection;
@@ -241,6 +243,25 @@ int Application::run() {
           });
         } else {
           interface.setPanelTitle("ATOMIC MODE");
+          const auto load_atom = [&atom_model](int protons, int neutrons, int electrons) {
+            atom_model.proton_count = protons;
+            atom_model.neutron_count = neutrons;
+            atom_model.electron_count = electrons;
+            atom_model.visual_pattern = physics::electron_pattern::spherical;
+            atom_model.photon_active = false;
+            atom_model.photon_time_fs = 0.0;
+            atom_model.photon_amplitude = {1.0, 0.0};
+            atom_model.excited_amplitude = {0.0, 0.0};
+          };
+          interface.addButton("NEXT ATOM MODEL", [load_atom, &selected_atom_preset] {
+            selected_atom_preset = (selected_atom_preset + 1) % 4;
+            switch (selected_atom_preset) {
+            case 0: load_atom(1, 0, 1); break;  // Hydrogen-1
+            case 1: load_atom(2, 2, 2); break;  // Helium-4
+            case 2: load_atom(6, 6, 6); break;  // Carbon-12
+            default: load_atom(8, 8, 8); break; // Oxygen-16
+            }
+          });
           interface.addSlider("ELECTRONS", atom_model.electron_count, 0, 118);
           interface.addSlider("ELECTRON SIZE", atom_model.electron_size, 1.0, 12.0);
           interface.addSlider("PROTONS", atom_model.proton_count, 1, 118);
@@ -255,11 +276,15 @@ int Application::run() {
           }, [&atom_model](double value) {
             atom_model.setPhotonCouplingEv(value);
           }, 0.0, 2.5);
-          interface.addInfo([] { return "N=0C E-/P+=1.602E-19C"; });
           interface.addInfo([&atom_model] {
             const auto charge = atom_model.net_charge_number();
             return std::string{"NET CHARGE "} + (charge >= 0 ? "+" : "") +
                    std::to_string(charge) + "E";
+          });
+          interface.addInfo([&atom_model] {
+            return std::string{"NUCLEUS P"} + std::to_string(atom_model.proton_count) +
+                   " N" + std::to_string(atom_model.neutron_count) + " / E" +
+                   std::to_string(atom_model.electron_count);
           });
           interface.addInfo([&atom_model] {
             if (atom_model.electron_count == 0) return std::string{"NO ELECTRON CLOUD"};
@@ -281,6 +306,13 @@ int Application::run() {
                    "%  E " + formatDecimal(atom_model.atomic_energy_ev(), 2) + "EV";
           });
           interface.addInfo([&atom_model] {
+            switch (atom_model.visual_pattern) {
+            case physics::electron_pattern::p_orbital: return std::string{"P ORBITAL LOBES"};
+            case physics::electron_pattern::d_orbital: return std::string{"D ORBITAL LOBES"};
+            default: return std::string{"SPHERICAL ORBITAL CLOUD"};
+            }
+          });
+          interface.addInfo([&atom_model] {
             if (!atom_model.photon_active && atom_model.photon_time_fs == 0.0) {
               return std::string{"PHOTON READY"};
             }
@@ -289,11 +321,30 @@ int Application::run() {
                        ? std::string{"PHOTON MOSTLY ABSORBED"}
                        : std::string{"PHOTON MOSTLY TRANSMITTED"};
           });
-          interface.addInfo([] { return "CLOUD RESPONDS TO PHOTON"; });
-          interface.addInfo([] { return "TWO-LEVEL TDSE; VISUAL SCALE"; });
+          interface.addInfo([&selected_atom_preset] {
+            constexpr std::array<const char*, 4> names{
+                "HYDROGEN-1", "HELIUM-4", "CARBON-12", "OXYGEN-16"};
+            return std::string{"MODEL "} + names[static_cast<std::size_t>(selected_atom_preset)];
+          });
           interface.setHeatmapLegend("ELECTRON PROBABILITY");
           interface.addButton("EMIT PHOTON", [&atom_model] {
             atom_model.emitPhoton();
+          });
+          interface.addButton("ADD PROTON", [&atom_model] {
+            atom_model.proton_count = std::min(atom_model.proton_count + 1, 118);
+          });
+          interface.addButton("NEXT ELECTRON PATTERN", [&atom_model] {
+            switch (atom_model.visual_pattern) {
+            case physics::electron_pattern::spherical:
+              atom_model.visual_pattern = physics::electron_pattern::p_orbital;
+              break;
+            case physics::electron_pattern::p_orbital:
+              atom_model.visual_pattern = physics::electron_pattern::d_orbital;
+              break;
+            case physics::electron_pattern::d_orbital:
+              atom_model.visual_pattern = physics::electron_pattern::spherical;
+              break;
+            }
           });
           interface.addButton("BACK TO MODE SELECT", [&requested_mode] {
             requested_mode = SimulationMode::selection;

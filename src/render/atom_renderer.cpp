@@ -44,6 +44,7 @@ uniform float photon_center_x;
 uniform float photon_wave_number;
 uniform float photon_amplitude;
 uniform float electron_size;
+uniform int electron_pattern;
 out vec3 point_color;
 out float point_alpha;
 
@@ -125,12 +126,35 @@ void main() {
 
     float radial_fraction = float(upper) / 1023.0;
     float angular_random = 2.0 * random_value(id, 0.754877666) - 1.0;
-    float cos_theta = excited_sample
-        ? sign(angular_random) * pow(abs(angular_random), 1.0 / 3.0)
-        : angular_random;
     float phi = 6.283185307 * random_value(id, 0.569840296);
-    float ring = sqrt(max(1.0 - cos_theta * cos_theta, 0.0));
-    vec3 direction = vec3(ring * cos(phi), cos_theta, ring * sin(phi));
+    float ring = sqrt(max(1.0 - angular_random * angular_random, 0.0));
+    vec3 direction = vec3(ring * cos(phi), angular_random, ring * sin(phi));
+    if (electron_pattern == 1 || electron_pattern == 2) {
+        // Rejection sampling produces recognizable p and d angular lobes
+        // while retaining the radial distribution of the selected atom.
+        for (int attempt = 0; attempt < 32; ++attempt) {
+            float z = 2.0 * random_value(id + float(attempt) * 97.0,
+                                         0.754877666) - 1.0;
+            float angle = 6.283185307 * random_value(
+                id + float(attempt) * 193.0, 0.569840296);
+            float r = sqrt(max(1.0 - z * z, 0.0));
+            vec3 candidate = vec3(r * cos(angle), z, r * sin(angle));
+            float angular_density = electron_pattern == 1
+                ? z * z
+                : 0.25 * (3.0 * z * z - 1.0) * (3.0 * z * z - 1.0);
+            float acceptance = random_value(id + float(attempt) * 389.0,
+                                            0.618033989);
+            if (acceptance <= angular_density) {
+                direction = candidate;
+                break;
+            }
+        }
+    } else if (excited_sample) {
+        float z = sign(angular_random) * pow(abs(angular_random), 1.0 / 3.0);
+        float excited_ring = sqrt(max(1.0 - z * z, 0.0));
+        direction = vec3(excited_ring * cos(phi), z, excited_ring * sin(phi));
+    }
+    float cos_theta = direction.y;
     float cloud_extent = clamp(0.95 + 0.10 * log(1.0 + max_radius_bohr), 1.0, 1.8);
     vec3 position = direction * (radial_fraction * cloud_extent);
 
@@ -235,6 +259,7 @@ bool AtomRenderer::initialize() {
     photon_wave_number_uniform_ = glGetUniformLocation(static_cast<GLuint>(program_), "photon_wave_number");
     photon_amplitude_uniform_ = glGetUniformLocation(static_cast<GLuint>(program_), "photon_amplitude");
     electron_size_uniform_ = glGetUniformLocation(static_cast<GLuint>(program_), "electron_size");
+    electron_pattern_uniform_ = glGetUniformLocation(static_cast<GLuint>(program_), "electron_pattern");
 
     GLuint vertex_array = 0;
     GLuint texture = 0;
@@ -358,6 +383,7 @@ void AtomRenderer::draw(const physics::atom& atom_model,
     glUniform1i(proton_count_uniform_, std::clamp(atom_model.proton_count, 0, 118));
     glUniform1i(neutron_count_uniform_, std::clamp(atom_model.neutron_count, 0, 300));
     glUniform1i(electron_count_uniform_, std::clamp(atom_model.electron_count, 0, 118));
+    glUniform1i(electron_pattern_uniform_, static_cast<GLint>(atom_model.visual_pattern));
     glUniform1i(excited_orbital_row_uniform_, excited_orbital_row);
     glUniform1i(ground_density_row_uniform_, ground_density_row);
     glUniform1i(excited_density_row_uniform_, excited_density_row);

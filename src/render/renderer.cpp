@@ -406,7 +406,7 @@ void Renderer::draw(const physics::black_hole& black_hole,
             std::max(glm::length(camera_offset), 0.01F);
         const auto disk_line_of_sight = std::sqrt(view_from_lens.x * view_from_lens.x +
                                                   view_from_lens.z * view_from_lens.z);
-        const auto disk_radius = horizon * 1.5F + std::max(static_cast<float>(grid_plane.size), 1.0F);
+        const auto disk_radius = horizon * 3.0F + std::max(static_cast<float>(grid_plane.size), 1.0F);
         source_distance = std::max(source_distance,
                                    lens_distance + disk_radius * disk_line_of_sight);
     }
@@ -474,7 +474,7 @@ void Renderer::draw(const physics::black_hole& black_hole,
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         upload_and_draw(grid, GL_LINES,
-                        {0.10F, 0.23F, 0.34F,
+                        {1.0F, 0.12F, 0.08F,
                          static_cast<float>(std::clamp(grid_plane.line_opacity, 0.0, 1.0))});
         glDisable(GL_BLEND);
         glLineWidth(1.0F);
@@ -506,8 +506,12 @@ void Renderer::draw(const physics::black_hole& black_hole,
     glBindVertexArray(0);
     glUseProgram(0);
 
+    // For a Schwarzschild hole, the critical impact parameter is
+    // 3*sqrt(3) GM/c^2, or 3*sqrt(3)/2 event-horizon radii.
+    constexpr auto schwarzschild_shadow_to_horizon = 2.598076211F;
     const auto shadow_radius = lens_center_clip.w > 0.0F
-        ? horizon * 1.30F / std::max(lens_distance, 0.01F) * projection[1][1]
+        ? horizon * schwarzschild_shadow_to_horizon /
+              std::max(lens_distance, 0.01F) * projection[1][1]
         : 0.0F;
     const auto lens_depth = lens_center_clip.w > 0.0F
         ? lens_center_clip.z / lens_center_clip.w * 0.5F + 0.5F : 1.0F;

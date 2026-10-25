@@ -7,6 +7,8 @@
 
 namespace opengl_sim::physics {
 
+enum class electron_pattern { spherical, p_orbital, d_orbital };
+
 struct atomic_orbital {
     int principal_quantum_number = 1;
     int angular_momentum_quantum_number = 0;
@@ -22,6 +24,7 @@ struct atom {
     int neutron_count = 0;
     int electron_count = 1;
     double electron_size = 3.3; // OpenGL point size; does not affect the atom model.
+    electron_pattern visual_pattern = electron_pattern::spherical;
 
     double photon_energy_ev = hydrogen_1s_2p_transition_ev;
     double photon_coupling_ev = 1.0;
@@ -41,7 +44,6 @@ struct atom {
         double radius_bohr, const std::vector<atomic_orbital>& orbitals) const noexcept;
     [[nodiscard]] double orbital_radial_probability(
         const atomic_orbital& orbital, double radius_bohr) const noexcept;
-
     void setPhotonEnergyEv(double energy_ev) noexcept;
     void setPhotonCouplingEv(double coupling_ev) noexcept;
     void emitPhoton() noexcept;
