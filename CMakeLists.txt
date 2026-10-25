@@ -69,6 +69,9 @@ endif()
 add_executable(opengl-sim
     src/main.cpp
     src/app/application.cpp
+    src/app/scene_manager.cpp
+    src/app/scenes/atomic_scene.cpp
+    src/app/scenes/celestial_scene.cpp
 )
 configure_simulator_target(opengl-sim)
 target_link_libraries(opengl-sim PRIVATE sim_core sim_physics sim_render sim_ui "${GLFW_TARGET}")
